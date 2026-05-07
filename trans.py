@@ -62,20 +62,25 @@ class StarInfo:
     # --- condition methods called by transitions ---
 
     def has_orbit(self):
+        '''Enough points for orbit determination'''
         return self.n_det_ok >= 3
 
     def has_sufficient_gap(self):
+        '''Orbit determination span criterion met'''
         if self.t_det_first is None or self.t_det_last is None:
             return False
         return (self.t_det_last - self.t_det_first) >= GAP_REQUIRED
 
     def char_succeeded(self):
+        '''Characterization successful'''
         return self.n_char_ok >= 1
 
     def char_exhausted(self):
+        '''No more char attempts allowed'''
         return self.n_char >= MAX_CHAR and self.n_char_ok == 0
 
     def detection_exhausted(self):
+        '''No more det attempts allowed'''
         return self.n_det >= MAX_DET and self.n_det_ok == 0
 
     # --- state-entry callbacks auto-discovered by transitions ---
@@ -196,7 +201,9 @@ class SurveySimulation:
         char_ok = bool(np.any(self._rng.random(size=(star.earths,)) < star.char_comp))
         if char_ok:
             star.n_char_ok += 1
-        star.succeed()
+            star.succeed()
+        else:
+            print(f"CHAR FAILED!")
         star.retire()
         self.DRM.append({'star_num': star.star_num, 'mode': 0,
                          'success': char_ok, 't': self.tk.current_time})
@@ -253,12 +260,17 @@ class SurveySimulation:
                   f"{s.n_char:6d}  {s.n_char_ok:9d}  {s.state}")
 
 
-def main():
+def run_one():
     su = SimulatedUniverse(eta=0.4)
     opt = OpticalSystem(su)
     tk = TimeKeeping()
     survey = SurveySimulation(su, opt, tk)
     survey.run_sim()
+    return survey
+
+
+def main():
+    run_one()
 
 
 if __name__ == "__main__":

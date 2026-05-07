@@ -7,7 +7,7 @@ import numpy as np
 from matplotlib.colors import ListedColormap
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
-from trans import OpticalSystem, SimulatedUniverse, SurveySimulation, TimeKeeping
+from trans import StarInfo, run_one
 
 STATES = ['unobserved', 'detected', 'orbit_found', 'promoted', 'characterizing', 'success', 'retired']
 
@@ -288,8 +288,6 @@ def _edge_label(t):
 
 
 def make_machine_doc_plot(survey, save_path='machine.png'):
-    from trans import StarInfo
-
     fig_w, fig_h = 13.0, 7.5
     fig = plt.figure(figsize=(fig_w, fig_h))
     gs = GridSpec(
@@ -352,11 +350,7 @@ def make_machine_doc_plot(survey, save_path='machine.png'):
 
 
 def main():
-    su = SimulatedUniverse(eta=0.4)
-    opt = OpticalSystem(su)
-    tk = TimeKeeping()
-    survey = SurveySimulation(su, opt, tk)
-    survey.run_sim()
+    survey = run_one()
     make_trace_plot(survey)
     make_transition_plot(survey)
     make_machine_doc_plot(survey)
