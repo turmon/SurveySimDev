@@ -4,7 +4,7 @@ from transitions import Machine
 MISSION_DURATION = 5 * 365.25   # days
 MAX_DET = 3     # failed detection attempts before retiring an unobserved star
 MAX_CHAR = 3    # characterization attempts before retiring a characterizing star
-REVISIT_WAIT = 0.3 * 365.25    # days — min gap after a successful detection before re-observing
+REVISIT_WAIT = 0.3 * 365.25    # days — min gap after any detection attempt before re-observing
 GAP_REQUIRED = 0.5 * 365.25    # days — min temporal baseline (t_det_last - t_det_first) for orbit
 
 
@@ -61,6 +61,7 @@ class StarInfo:
         self.n_char_ok = 0
         self.t_det_first = None
         self.t_det_last = None
+        self.t_det_attempt = None   # time of last detection attempt (success or failure)
 
     # --- condition methods called by transitions ---
 
@@ -147,9 +148,9 @@ class SurveySimulation:
     def _det_eligible(self, star):
         if not (star.is_unobserved() or star.is_detected()):
             return False
-        if star.t_det_last is None:
+        if star.t_det_attempt is None:
             return True
-        return self.tk.current_time - star.t_det_last >= REVISIT_WAIT
+        return self.tk.current_time - star.t_det_attempt >= REVISIT_WAIT
 
     def next_target(self):
         char_cands = [s for s in self.stars if s.is_characterizing()]
@@ -165,6 +166,51 @@ class SurveySimulation:
             return best, -1
 
         return None, None
+
+    def observation_detection(self, star):
+        int_time = self.os.calc_intTime(star.star_num)
+        self.tk.allocate(int_time)
+        self.state_history.append([s.state for s in self.stars])
+        star.n_det += 1
+        star.t_det_attempt = self.tk.current_time
+        det_ok = self._rng.random() < star.det_comp
+        if det_ok:
+            star.n_det_ok += 1
+            if star.t_det_first is None:
+                star.t_det_first = self.tk.current_time
+            star.t_det_last = self.tk.current_time
+            if star.is_unobserved():
+                star.first_detection()
+        if star.is_unobserved() and star.detection_exhausted():
+            star.give_up_detection()
+        star.find_orbit()
+        self.DRM.append({'star_num': star.star_num, 'mode': -1,
+                         'success': det_ok, 't': self.tk.current_time})
+
+    def observation_characterization(self, star):
+        int_time = self.os.calc_intTime(star.star_num)
+        self.tk.allocate(int_time)
+        self.state_history.append([s.state for s in self.stars])
+        star.n_char += 1
+        char_ok = self._rng.random() < star.char_comp
+        if char_ok:
+            star.n_char_ok += 1
+        star.retire()
+        self.DRM.append({'star_num': star.star_num, 'mode': 0,
+                         'success': char_ok, 't': self.tk.current_time})
+
+    def observation_advance(self):
+        active = [s for s in self.stars if not s.is_retired()]
+        if not active:
+            return False
+        blocked = [s for s in active
+                   if s.t_det_attempt is not None
+                   and self.tk.current_time - s.t_det_attempt < REVISIT_WAIT]
+        if not blocked:
+            return False
+        next_open = min(s.t_det_attempt + REVISIT_WAIT for s in blocked)
+        self.tk.allocate(next_open - self.tk.current_time)
+        return True
 
     def run_sim(self):
         n = self.su.n_star
@@ -183,47 +229,14 @@ class SurveySimulation:
 
             # Step 3: handle idle or execute observation
             if star is None:
-                active = [s for s in self.stars if not s.is_retired()]
-                if not active:
+                if not self.observation_advance():
                     break
-                blocked = [s for s in active
-                           if s.t_det_last is not None
-                           and self.tk.current_time - s.t_det_last < REVISIT_WAIT]
-                if not blocked:
-                    break
-                next_open = min(s.t_det_last + REVISIT_WAIT for s in blocked)
-                self.tk.allocate(next_open - self.tk.current_time)
                 continue
 
-            int_time = self.os.calc_intTime(star.star_num)
-            self.tk.allocate(int_time)
-
-            if mode == -1:  # detection
-                self.state_history.append([s.state for s in self.stars])
-                star.n_det += 1
-                det_ok = self._rng.random() < star.det_comp
-                if det_ok:
-                    star.n_det_ok += 1
-                    if star.t_det_first is None:
-                        star.t_det_first = self.tk.current_time
-                    star.t_det_last = self.tk.current_time
-                    if star.is_unobserved():
-                        star.first_detection()
-                if star.is_unobserved() and star.detection_exhausted():
-                    star.give_up_detection()
-                star.find_orbit()
-                self.DRM.append({'star_num': star.star_num, 'mode': mode,
-                                 'success': det_ok, 't': self.tk.current_time})
-
-            elif mode == 0:  # characterization
-                self.state_history.append([s.state for s in self.stars])
-                star.n_char += 1
-                char_ok = self._rng.random() < star.char_comp
-                if char_ok:
-                    star.n_char_ok += 1
-                star.retire()
-                self.DRM.append({'star_num': star.star_num, 'mode': mode,
-                                 'success': char_ok, 't': self.tk.current_time})
+            if mode == -1:
+                self.observation_detection(star)
+            elif mode == 0:
+                self.observation_characterization(star)
 
         self._print_summary()
 
