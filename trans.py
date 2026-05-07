@@ -16,14 +16,10 @@ class SimulatedUniverse:
         self.earths = rng.poisson(eta, size=n_star)
         self.dist = rng.uniform(1.0, 10.0, size=n_star)
         det_raw = 5.0 / self.dist + rng.uniform(-0.1, 0.1, size=n_star)
-        # stars with no earths cannot be detected
-        self.det_comp = np.where(
-            self.earths > 0,
-            np.clip(det_raw, 0.05, 0.95),
-            0.0,
-        )
-        char_raw = 3.0 / self.dist + rng.uniform(-0.1, 0.1, size=n_star)
-        self.char_comp = np.clip(char_raw, 0.05, 0.95)
+        self.det_comp = np.clip(det_raw, 0.05, 0.95)
+        # assume good but not great char scheduling
+        char_raw = rng.uniform(0.8, 1.0, size=n_star)
+        self.char_comp = np.clip(char_raw, 0.05, 1.0)
 
 
 class OpticalSystem:
@@ -173,7 +169,7 @@ class SurveySimulation:
         self.state_history.append([s.state for s in self.stars])
         star.n_det += 1
         star.t_det_attempt = self.tk.current_time
-        det_ok = self._rng.random() < star.det_comp
+        det_ok = bool(np.any(self._rng.random(size=(star.earths,)) < star.det_comp))
         if det_ok:
             star.n_det_ok += 1
             if star.t_det_first is None:
@@ -192,7 +188,7 @@ class SurveySimulation:
         self.tk.allocate(int_time)
         self.state_history.append([s.state for s in self.stars])
         star.n_char += 1
-        char_ok = self._rng.random() < star.char_comp
+        char_ok = bool(np.any(self._rng.random(size=(star.earths,)) < star.char_comp))
         if char_ok:
             star.n_char_ok += 1
         star.retire()
