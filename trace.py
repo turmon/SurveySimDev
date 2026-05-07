@@ -131,6 +131,9 @@ def make_trace_plot(survey, save_path='trace.png'):
                 mpatches.Rectangle((0, i - 0.5), 1, 1,
                                    facecolor=color, edgecolor='none')
             )
+            if survey.stars[i].state != 'success':
+                ax_side.plot(0.5, i, 'x', color='red',
+                             markersize=7, markeredgewidth=1.5, zorder=4)
 
     ax_side.set_xlim(0, 1)
     ax_side.set_ylim(n_star - 0.5, -0.5)   # inverted to match imshow
