@@ -9,16 +9,19 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from trans import StarInfo, run_one
 
-STATES = ['unobserved', 'detected', 'orbit_found', 'promoted', 'characterizing', 'success', 'retired']
+STATES = ['unobserved', 'detected', 'orbit_found', 'promoted',
+          'char_vis', 'char_nuv', 'char_nir', 'success', 'retired']
 
 STATE_COLORS = {
-    'unobserved':     '#f5f5f5',
-    'detected':       '#9ecae1',
-    'orbit_found':    '#3182bd',
-    'promoted':       '#fec44f',
-    'characterizing': '#74c476',
-    'success':        '#006d2c',
-    'retired':        '#969696',
+    'unobserved': '#f5f5f5',
+    'detected':   '#9ecae1',
+    'orbit_found':'#3182bd',
+    'promoted':   '#fec44f',
+    'char_vis':   '#74c476',   # green  (VIS)
+    'char_nuv':   '#9e9ac8',   # purple (NUV)
+    'char_nir':   '#fc8d59',   # orange (NIR)
+    'success':    '#006d2c',
+    'retired':    '#969696',
 }
 
 DOT_STYLES = {
@@ -30,44 +33,54 @@ DOT_STYLES = {
 
 # State machine diagram layout
 _STATE_POS = {
-    'unobserved':     (0.0, 1.0),
-    'detected':       (1.0, 1.0),
-    'orbit_found':    (2.0, 1.0),
-    'promoted':       (3.0, 1.0),
-    'characterizing': (4.0, 1.0),
-    'success':        (5.0, 1.0),
-    'retired':        (2.0, 0.0),
+    'unobserved':  (0.0, 1.0),
+    'detected':    (1.0, 1.0),
+    'orbit_found': (2.0, 1.0),
+    'promoted':    (3.0, 1.0),
+    'char_vis':    (4.0, 1.0),
+    'char_nuv':    (5.0, 1.0),
+    'char_nir':    (6.0, 1.0),
+    'success':     (7.0, 1.0),
+    'retired':     (4.0, 0.0),
 }
 
 _TRANSITIONS_FULL = [
-    {'src': 'unobserved',     'dst': 'detected',       'trigger': 'first_detection',   'conditions': []},
-    {'src': 'unobserved',     'dst': 'retired',        'trigger': 'give_up_detection', 'conditions': []},
-    {'src': 'detected',       'dst': 'orbit_found',    'trigger': 'find_orbit',        'conditions': ['has_orbit', 'has_sufficient_gap']},
-    {'src': 'orbit_found',    'dst': 'promoted',       'trigger': 'promote',           'conditions': []},
-    {'src': 'promoted',       'dst': 'characterizing', 'trigger': 'start_char',        'conditions': []},
-    {'src': 'characterizing', 'dst': 'success',        'trigger': 'succeed',           'conditions': ['char_succeeded']},
-    {'src': 'characterizing', 'dst': 'retired',        'trigger': 'retire',            'conditions': ['char_exhausted']},
+    {'src': 'unobserved',  'dst': 'detected',   'trigger': 'first_detection',   'conditions': []},
+    {'src': 'unobserved',  'dst': 'retired',    'trigger': 'give_up_detection', 'conditions': []},
+    {'src': 'detected',    'dst': 'orbit_found','trigger': 'find_orbit',        'conditions': ['has_orbit', 'has_sufficient_gap']},
+    {'src': 'orbit_found', 'dst': 'promoted',   'trigger': 'promote',           'conditions': []},
+    {'src': 'promoted',    'dst': 'char_vis',   'trigger': 'start_char',        'conditions': []},
+    {'src': 'char_vis',    'dst': 'char_nuv',   'trigger': 'advance_char_vis',  'conditions': ['vis_char_succeeded']},
+    {'src': 'char_vis',    'dst': 'retired',    'trigger': 'retire_vis',        'conditions': ['vis_char_exhausted']},
+    {'src': 'char_nuv',    'dst': 'char_nir',   'trigger': 'advance_char_nuv',  'conditions': ['nuv_char_succeeded']},
+    {'src': 'char_nuv',    'dst': 'retired',    'trigger': 'retire_nuv',        'conditions': ['nuv_char_exhausted']},
+    {'src': 'char_nir',    'dst': 'success',    'trigger': 'succeed',           'conditions': ['all_char_succeeded']},
+    {'src': 'char_nir',    'dst': 'retired',    'trigger': 'retire_nir',        'conditions': ['nir_char_exhausted']},
 ]
 _ALL_TRANSITIONS = [(t['src'], t['dst']) for t in _TRANSITIONS_FULL]
 
 _FULL_LABEL = {
-    'unobserved':     'unobserved',
-    'detected':       'detected',
-    'orbit_found':    'orbit\nfound',
-    'promoted':       'promoted',
-    'characterizing': 'charact-\nerizing',
-    'success':        'success',
-    'retired':        'retired',
+    'unobserved':  'unobserved',
+    'detected':    'detected',
+    'orbit_found': 'orbit\nfound',
+    'promoted':    'promoted',
+    'char_vis':    'char\nVIS',
+    'char_nuv':    'char\nNUV',
+    'char_nir':    'char\nNIR',
+    'success':     'success',
+    'retired':     'retired',
 }
 
 _ABBREV = {
-    'unobserved':     'un',
-    'detected':       'de',
-    'orbit_found':    'or',
-    'promoted':       'pr',
-    'characterizing': 'ch',
-    'success':        'su',
-    'retired':        're',
+    'unobserved':  'un',
+    'detected':    'de',
+    'orbit_found': 'or',
+    'promoted':    'pr',
+    'char_vis':    'cv',
+    'char_nuv':    'cu',
+    'char_nir':    'ci',
+    'success':     'su',
+    'retired':     're',
 }
 
 
@@ -111,7 +124,8 @@ def make_trace_plot(survey, save_path='trace.png'):
 
     # Observation dots
     for k, obs in enumerate(DRM):
-        color, _ = DOT_STYLES[(obs['mode'], obs['success'])]
+        color, _ = DOT_STYLES.get((obs['mode'], obs['success']),
+                                   DOT_STYLES[(0, obs['success'])])
         ax_main.plot(
             k, obs['star_num'], 'o',
             color=color, markersize=4,
@@ -197,10 +211,10 @@ def _star_visits(survey, star_idx):
     visited = set(seq)
     taken = {(a, b) for a, b in zip(seq, seq[1:]) if a != b}
     # orbit_found and promoted are transient — not captured in state_history
-    if 'detected' in visited and 'characterizing' in visited:
+    if 'detected' in visited and 'char_vis' in visited:
         visited |= {'orbit_found', 'promoted'}
         taken |= {('detected', 'orbit_found'), ('orbit_found', 'promoted'),
-                  ('promoted', 'characterizing')}
+                  ('promoted', 'char_vis')}
     return visited, taken
 
 
@@ -233,7 +247,7 @@ def _draw_fsm(ax, visited, taken, fontsize=7, shrink=8, mini=False):
                 linewidth=1.2 if is_visited else 0.5,
             ),
         )
-    ax.set_xlim(-0.6, 5.6)
+    ax.set_xlim(-0.6, 7.6)
     ax.set_ylim(-0.6, 1.6)
     ax.axis('off')
 
