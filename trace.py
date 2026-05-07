@@ -10,7 +10,7 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from trans import StarInfo, run_one
 
 STATES = ['unobserved', 'detected', 'orbit_found', 'promoted',
-          'char_vis', 'char_nuv', 'char_nir', 'success', 'retired']
+          'char_vis', 'char_nuv', 'char_nir', 'success', 'partial', 'retired']
 
 STATE_COLORS = {
     'unobserved': '#f5f5f5',
@@ -21,6 +21,7 @@ STATE_COLORS = {
     'char_nuv':   '#9e9ac8',   # purple (NUV)
     'char_nir':   '#fc8d59',   # orange (NIR)
     'success':    '#006d2c',
+    'partial':    '#a1d99b',   # light green — some modes succeeded
     'retired':    '#969696',
 }
 
@@ -42,6 +43,7 @@ _STATE_POS = {
     'char_nir':    (6.0, 1.0),
     'success':     (7.0, 1.0),
     'retired':     (4.0, 0.0),
+    'partial':     (6.0, 0.0),
 }
 
 _TRANSITIONS_FULL = [
@@ -56,6 +58,8 @@ _TRANSITIONS_FULL = [
     {'src': 'char_nuv',    'dst': 'retired',    'trigger': 'retire_nuv',        'conditions': ['nuv_char_exhausted']},
     {'src': 'char_nir',    'dst': 'success',    'trigger': 'succeed',           'conditions': ['all_char_succeeded']},
     {'src': 'char_nir',    'dst': 'retired',    'trigger': 'retire_nir',        'conditions': ['nir_char_exhausted']},
+    {'src': 'char_nuv',    'dst': 'partial',    'trigger': 'go_partial',         'conditions': ['is_partial_success']},
+    {'src': 'char_nir',    'dst': 'partial',    'trigger': 'go_partial',         'conditions': ['is_partial_success']},
 ]
 _ALL_TRANSITIONS = [(t['src'], t['dst']) for t in _TRANSITIONS_FULL]
 
@@ -68,6 +72,7 @@ _FULL_LABEL = {
     'char_nuv':    'char\nNUV',
     'char_nir':    'char\nNIR',
     'success':     'success',
+    'partial':     'partial',
     'retired':     'retired',
 }
 
@@ -80,6 +85,7 @@ _ABBREV = {
     'char_nuv':    'cu',
     'char_nir':    'ci',
     'success':     'su',
+    'partial':     'pa',
     'retired':     're',
 }
 
@@ -92,10 +98,11 @@ def make_trace_plot(survey, save_path='trace.png'):
         print("No observations recorded.")
         return
 
-    # Build integer state matrix (n_star × n_obs)
+    # Build integer state matrix (n_star × n_hist); n_hist = n_obs + 1
+    n_hist = len(survey.state_history)
     state_idx = {s: i for i, s in enumerate(STATES)}
     num_matrix = np.array(
-        [[state_idx[survey.state_history[k][i]] for k in range(n_obs)]
+        [[state_idx[survey.state_history[k][i]] for k in range(n_hist)]
          for i in range(n_star)],
         dtype=float,
     )
@@ -188,7 +195,11 @@ def make_trace_plot(survey, save_path='trace.png'):
                 mpatches.Rectangle((0, i - 0.5), 1, 1,
                                    facecolor=color, edgecolor='none')
             )
-            if survey.stars[i].state != 'success':
+            final = survey.stars[i].state
+            if final == 'partial':
+                ax_side.plot(0.5, i, 'P', color='black',
+                             markersize=6, zorder=4)
+            elif final != 'success':
                 ax_side.plot(0.5, i, 'x', color='red',
                              markersize=7, markeredgewidth=1.5, zorder=4)
 
@@ -205,9 +216,8 @@ def make_trace_plot(survey, save_path='trace.png'):
 
 def _star_visits(survey, star_idx):
     """Return (visited_states, taken_transitions) for one star."""
-    n_obs = len(survey.DRM)
-    seq = [survey.state_history[k][star_idx] for k in range(n_obs)]
-    seq.append(survey.stars[star_idx].state)
+    # state_history[-1] is the post-mission snapshot (includes partial)
+    seq = [survey.state_history[k][star_idx] for k in range(len(survey.state_history))]
     visited = set(seq)
     taken = {(a, b) for a, b in zip(seq, seq[1:]) if a != b}
     # orbit_found and promoted are transient — not captured in state_history

@@ -10,7 +10,10 @@ GAP_REQUIRED = 0.5 * 365.25    # days — min temporal baseline (t_det_last - t_
 N_MODE = 3
 MODE_VIS, MODE_NUV, MODE_NIR = 0, 1, 2
 CHAR_INT_FACTORS = [1.2, 1.0, 1.5]   # intTime multiplier per char mode [vis, nuv, nir]
+COMP_FACTORS     = [0.8, 0.9, 0.5]   # lower bound of char completeness per mode
 
+OBS_OVERHEAD = 0.2 # days, for everything
+CHAR_OVERHEAD = 0.8 # days, additional for chars
 
 class SimulatedUniverse:
     def __init__(self, eta, n_star=30, seed=None):
@@ -22,7 +25,8 @@ class SimulatedUniverse:
         det_raw = 5.0 / self.dist + rng.uniform(-0.1, 0.1, size=n_star)
         self.det_comp = np.clip(det_raw, 0.05, 0.95)
         # independent completeness per star and per char mode
-        char_raw = rng.uniform(0.8, 1.0, size=(n_star, N_MODE))
+        char_raw = np.column_stack([rng.uniform(COMP_FACTORS[m], 1.0, size=n_star)
+                                    for m in range(N_MODE)])
         self.char_comp = np.clip(char_raw, 0.05, 1.0)
 
 
@@ -34,6 +38,8 @@ class OpticalSystem:
         t = 0.5 * self._dist[star_num] ** 2
         if mode >= 0:
             t *= CHAR_INT_FACTORS[mode]
+            t += CHAR_OVERHEAD
+        t += OBS_OVERHEAD
         return float(t)
 
 
@@ -106,6 +112,10 @@ class StarInfo:
         '''NIR attempts exhausted with no success'''
         return self.n_char[MODE_NIR] >= MAX_CHAR and self.n_char_ok[MODE_NIR] == 0
 
+    def is_partial_success(self):
+        '''Some but not all char modes succeeded at mission end'''
+        return bool(np.any(self.n_char_ok >= 1) and not np.all(self.n_char_ok >= 1))
+
     def detection_exhausted(self):
         '''No more det attempts allowed'''
         return self.n_det >= MAX_DET and self.n_det_ok == 0
@@ -140,6 +150,10 @@ class StarInfo:
         counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(N_MODE))
         print(f"  Star {self.star_num:2d}: char_nir    -> SUCCESS        "
               f"(ok/att per mode: [{counts}])")
+
+    def on_enter_partial(self):
+        counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(N_MODE))
+        print(f"  Star {self.star_num:2d}: -> PARTIAL  (char ok/att=[{counts}])")
 
     def on_enter_retired(self):
         if np.any(self.n_char > 0):
@@ -182,11 +196,12 @@ class SurveySimulation:
             {'trigger': 'retire_nuv',        'source': 'char_nuv',    'dest': 'retired',      'conditions': 'nuv_char_exhausted'},
             {'trigger': 'succeed',           'source': 'char_nir',    'dest': 'success',      'conditions': 'all_char_succeeded'},
             {'trigger': 'retire_nir',        'source': 'char_nir',    'dest': 'retired',      'conditions': 'nir_char_exhausted'},
+            {'trigger': 'go_partial',        'source': ['char_vis', 'char_nuv', 'char_nir'], 'dest': 'partial', 'conditions': 'is_partial_success'},
         ]
         self._machine = Machine(
             model=self.stars,
             states=['unobserved', 'detected', 'orbit_found', 'promoted',
-                    'char_vis', 'char_nuv', 'char_nir', 'success', 'retired'],
+                    'char_vis', 'char_nuv', 'char_nir', 'success', 'partial', 'retired'],
             transitions=transitions_spec,
             initial='unobserved',
             ignore_invalid_triggers=True,
@@ -237,7 +252,8 @@ class SurveySimulation:
             star.give_up_detection()
         star.find_orbit()
         self.DRM.append({'star_num': star.star_num, 'mode': -1,
-                         'success': det_ok, 't': self.tk.current_time})
+                         'success': det_ok, 't': self.tk.current_time,
+                         'int_time': int_time})
 
     def observation_characterization(self, star, mode):
         int_time = self.os.calc_intTime(star.star_num, mode)
@@ -257,7 +273,8 @@ class SurveySimulation:
             star.succeed()
             star.retire_nir()
         self.DRM.append({'star_num': star.star_num, 'mode': mode,
-                         'success': char_ok, 't': self.tk.current_time})
+                         'success': char_ok, 't': self.tk.current_time,
+                         'int_time': int_time})
 
     def observation_advance(self):
         active = [s for s in self.stars if not s.is_retired() and not s.is_success()]
@@ -298,6 +315,10 @@ class SurveySimulation:
             elif mode >= 0:
                 self.observation_characterization(star, mode)
 
+        # End-of-mission: mark stars with partial char success
+        for star in self.stars:
+            star.go_partial()
+        self.state_history.append([s.state for s in self.stars])
         self._print_summary()
 
     def _print_summary(self):
