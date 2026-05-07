@@ -1,5 +1,4 @@
 import colorsys
-import matplotlib
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -139,8 +138,7 @@ def make_trace_plot(survey, save_path='trace.png'):
     ax_side.set_xlabel('♁', fontsize=12)
 
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    if matplotlib.get_backend().lower() != 'agg':
-        plt.show()
+    plt.close()
     print(f"Saved to {save_path}")
 
 
