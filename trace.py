@@ -1,4 +1,5 @@
 import colorsys
+import inspect
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -38,15 +39,16 @@ _STATE_POS = {
     'retired':        (2.0, 0.0),
 }
 
-_ALL_TRANSITIONS = [
-    ('unobserved',     'detected'),
-    ('unobserved',     'retired'),
-    ('detected',       'orbit_found'),
-    ('orbit_found',    'promoted'),
-    ('promoted',       'characterizing'),
-    ('characterizing', 'success'),
-    ('characterizing', 'retired'),
+_TRANSITIONS_FULL = [
+    {'src': 'unobserved',     'dst': 'detected',       'trigger': 'first_detection',   'conditions': []},
+    {'src': 'unobserved',     'dst': 'retired',        'trigger': 'give_up_detection', 'conditions': []},
+    {'src': 'detected',       'dst': 'orbit_found',    'trigger': 'find_orbit',        'conditions': ['has_orbit', 'has_sufficient_gap']},
+    {'src': 'orbit_found',    'dst': 'promoted',       'trigger': 'promote',           'conditions': []},
+    {'src': 'promoted',       'dst': 'characterizing', 'trigger': 'start_char',        'conditions': []},
+    {'src': 'characterizing', 'dst': 'success',        'trigger': 'succeed',           'conditions': ['char_succeeded']},
+    {'src': 'characterizing', 'dst': 'retired',        'trigger': 'retire',            'conditions': ['char_exhausted']},
 ]
+_ALL_TRANSITIONS = [(t['src'], t['dst']) for t in _TRANSITIONS_FULL]
 
 _FULL_LABEL = {
     'unobserved':     'unobserved',
@@ -182,7 +184,7 @@ def make_trace_plot(survey, save_path='trace.png'):
     ax_side.set_yticks([])
     ax_side.set_xlabel('♁', fontsize=12)
 
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved to {save_path}")
 
@@ -273,7 +275,78 @@ def make_transition_plot(survey, save_path='transitions.png'):
         ax = fig.add_subplot(gs_stars[i // n_cols, i % n_cols])
         ax.axis('off')
 
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.savefig(save_path, dpi=400, bbox_inches='tight')
+    plt.close()
+    print(f"Saved to {save_path}")
+
+
+def _edge_label(t):
+    s = t['trigger']
+    if t['conditions']:
+        s += '\n[' + ', '.join(t['conditions']) + ']'
+    return s
+
+
+def make_machine_doc_plot(survey, save_path='machine.png'):
+    from trans import StarInfo
+
+    fig_w, fig_h = 13.0, 7.5
+    fig = plt.figure(figsize=(fig_w, fig_h))
+    gs = GridSpec(
+        2, 1, figure=fig,
+        height_ratios=[5.0, 2.5],
+        hspace=0.25,
+        top=0.93, bottom=0.04, left=0.02, right=0.98,
+    )
+
+    # --- Top panel: annotated machine diagram ---
+    ax = fig.add_subplot(gs[0])
+    _draw_fsm(ax, set(STATES), set(_ALL_TRANSITIONS), fontsize=10, shrink=16, mini=False)
+    ax.set_title('State Machine — Triggers and Guard Conditions', fontsize=12, pad=8)
+
+    for t in _TRANSITIONS_FULL:
+        x0, y0 = _STATE_POS[t['src']]
+        x1, y1 = _STATE_POS[t['dst']]
+        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+        label = _edge_label(t)
+        if y0 == y1:
+            # horizontal arrow — label above
+            ax.text(mx, my + 0.18, label,
+                    ha='center', va='bottom', fontsize=7,
+                    color='#333', linespacing=1.3,
+                    bbox=dict(facecolor='white', edgecolor='none', pad=1))
+        else:
+            # diagonal arrow — label to the right of midpoint
+            ax.text(mx + 0.08, my, label,
+                    ha='left', va='center', fontsize=7,
+                    color='#333', linespacing=1.3,
+                    bbox=dict(facecolor='white', edgecolor='none', pad=1))
+
+    # --- Bottom panel: guard-condition docstring table ---
+    ax_doc = fig.add_subplot(gs[1])
+    ax_doc.axis('off')
+
+    cond_names = []
+    seen = set()
+    for t in _TRANSITIONS_FULL:
+        for c in t['conditions']:
+            if c not in seen:
+                cond_names.append(c)
+                seen.add(c)
+
+    col_w = max(len(n) for n in cond_names) + 2
+    lines = ['Guard conditions\n' + '─' * 48]
+    for name in cond_names:
+        method = getattr(StarInfo, name, None)
+        doc = (inspect.getdoc(method) or '').splitlines()[0] if method else ''
+        lines.append(f'{name.ljust(col_w)}{doc}')
+
+    ax_doc.text(0.02, 0.95, '\n'.join(lines),
+                ha='left', va='top',
+                fontfamily='monospace', fontsize=9,
+                transform=ax_doc.transAxes)
+
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved to {save_path}")
 
@@ -286,6 +359,7 @@ def main():
     survey.run_sim()
     make_trace_plot(survey)
     make_transition_plot(survey)
+    make_machine_doc_plot(survey)
 
 
 if __name__ == '__main__':
