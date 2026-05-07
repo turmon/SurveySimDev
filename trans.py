@@ -9,8 +9,9 @@ GAP_REQUIRED = 0.5 * 365.25    # days — min temporal baseline (t_det_last - t_
 
 N_MODE = 3
 MODE_VIS, MODE_NUV, MODE_NIR = 0, 1, 2
-CHAR_INT_FACTORS = [1.2, 1.0, 1.5]   # intTime multiplier per char mode [vis, nuv, nir]
+CHAR_INT_FACTORS = [1.2, 1.0, 2.0]   # intTime multiplier per char mode [vis, nuv, nir]
 COMP_FACTORS     = [0.8, 0.9, 0.5]   # lower bound of char completeness per mode
+MAX_INT_TIME     = 60.0               # days — char observations longer than this are skipped
 
 OBS_OVERHEAD = 0.2 # days, for everything
 CHAR_OVERHEAD = 0.8 # days, additional for chars
@@ -221,6 +222,8 @@ class SurveySimulation:
             if   s.is_char_vis(): char_cands.append((s, MODE_VIS))
             elif s.is_char_nuv(): char_cands.append((s, MODE_NUV))
             elif s.is_char_nir(): char_cands.append((s, MODE_NIR))
+        char_cands = [(s, m) for s, m in char_cands
+                      if self.os.calc_intTime(s.star_num, m) <= MAX_INT_TIME]
         if char_cands:
             best, mode = max(char_cands,
                              key=lambda sm: sm[0].char_comp[sm[1]] / self.os.calc_intTime(sm[0].star_num, sm[1]))
