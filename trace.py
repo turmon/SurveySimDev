@@ -8,7 +8,7 @@ from matplotlib.gridspec import GridSpec
 
 from trans import OpticalSystem, SimulatedUniverse, SurveySimulation, TimeKeeping
 
-STATES = ['unobserved', 'detected', 'orbit_found', 'promoted', 'characterizing', 'retired']
+STATES = ['unobserved', 'detected', 'orbit_found', 'promoted', 'characterizing', 'success', 'retired']
 
 STATE_COLORS = {
     'unobserved':     '#f5f5f5',
@@ -16,6 +16,7 @@ STATE_COLORS = {
     'orbit_found':    '#3182bd',
     'promoted':       '#fec44f',
     'characterizing': '#74c476',
+    'success':        '#006d2c',
     'retired':        '#969696',
 }
 

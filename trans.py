@@ -69,8 +69,11 @@ class StarInfo:
             return False
         return (self.t_det_last - self.t_det_first) >= GAP_REQUIRED
 
-    def char_done(self):
-        return self.n_char_ok >= 1 or self.n_char >= MAX_CHAR
+    def char_succeeded(self):
+        return self.n_char_ok >= 1
+
+    def char_exhausted(self):
+        return self.n_char >= MAX_CHAR and self.n_char_ok == 0
 
     def detection_exhausted(self):
         return self.n_det >= MAX_DET and self.n_det_ok == 0
@@ -93,12 +96,13 @@ class StarInfo:
     def on_enter_characterizing(self):
         print(f"  Star {self.star_num:2d}: promoted    -> CHARACTERIZING")
 
+    def on_enter_success(self):
+        print(f"  Star {self.star_num:2d}: characterizing -> SUCCESS    "
+              f"(char={self.n_char_ok}/{self.n_char})")
+
     def on_enter_retired(self):
         if self.n_char > 0:
-            if self.n_char_ok > 0:
-                note = f"char SUCCESS ({self.n_char_ok}/{self.n_char})"
-            else:
-                note = f"char FAILED (0/{self.n_char})"
+            note = f"char FAILED (0/{self.n_char})"
         else:
             note = f"never detected ({self.n_det} attempts)"
         print(f"  Star {self.star_num:2d}: -> RETIRED  ({note})")
@@ -130,11 +134,12 @@ class SurveySimulation:
             {'trigger': 'find_orbit',        'source': 'detected',       'dest': 'orbit_found',    'conditions': ['has_orbit', 'has_sufficient_gap']},
             {'trigger': 'promote',           'source': 'orbit_found',    'dest': 'promoted'},
             {'trigger': 'start_char',        'source': 'promoted',       'dest': 'characterizing'},
-            {'trigger': 'retire',            'source': 'characterizing', 'dest': 'retired',        'conditions': 'char_done'},
+            {'trigger': 'succeed',           'source': 'characterizing', 'dest': 'success',        'conditions': 'char_succeeded'},
+            {'trigger': 'retire',            'source': 'characterizing', 'dest': 'retired',        'conditions': 'char_exhausted'},
         ]
         self._machine = Machine(
             model=self.stars,
-            states=['unobserved', 'detected', 'orbit_found', 'promoted', 'characterizing', 'retired'],
+            states=['unobserved', 'detected', 'orbit_found', 'promoted', 'characterizing', 'success', 'retired'],
             transitions=transitions_spec,
             initial='unobserved',
             ignore_invalid_triggers=True,
@@ -191,12 +196,13 @@ class SurveySimulation:
         char_ok = bool(np.any(self._rng.random(size=(star.earths,)) < star.char_comp))
         if char_ok:
             star.n_char_ok += 1
+        star.succeed()
         star.retire()
         self.DRM.append({'star_num': star.star_num, 'mode': 0,
                          'success': char_ok, 't': self.tk.current_time})
 
     def observation_advance(self):
-        active = [s for s in self.stars if not s.is_retired()]
+        active = [s for s in self.stars if not s.is_retired() and not s.is_success()]
         if not active:
             return False
         blocked = [s for s in active
