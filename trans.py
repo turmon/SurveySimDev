@@ -113,6 +113,8 @@ class SurveySimulation:
         self.os = optical_system
         self.tk = time_keeping
         self._rng = np.random.default_rng()
+        self.state_history = []   # one n_star state-vector per observation
+        self.DRM = []             # one record per observation
         self.stars = [
             StarInfo(
                 star_num=i,
@@ -197,8 +199,10 @@ class SurveySimulation:
             self.tk.allocate(int_time)
 
             if mode == -1:  # detection
+                self.state_history.append([s.state for s in self.stars])
                 star.n_det += 1
-                if self._rng.random() < star.det_comp:
+                det_ok = self._rng.random() < star.det_comp
+                if det_ok:
                     star.n_det_ok += 1
                     if star.t_det_first is None:
                         star.t_det_first = self.tk.current_time
@@ -208,12 +212,18 @@ class SurveySimulation:
                 if star.is_unobserved() and star.detection_exhausted():
                     star.give_up_detection()
                 star.find_orbit()
+                self.DRM.append({'star_num': star.star_num, 'mode': mode,
+                                 'success': det_ok, 't': self.tk.current_time})
 
             elif mode == 0:  # characterization
+                self.state_history.append([s.state for s in self.stars])
                 star.n_char += 1
-                if self._rng.random() < star.char_comp:
+                char_ok = self._rng.random() < star.char_comp
+                if char_ok:
                     star.n_char_ok += 1
                 star.retire()
+                self.DRM.append({'star_num': star.star_num, 'mode': mode,
+                                 'success': char_ok, 't': self.tk.current_time})
 
         self._print_summary()
 
