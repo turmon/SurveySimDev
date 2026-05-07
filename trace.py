@@ -4,7 +4,7 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import ListedColormap
-from matplotlib.gridspec import GridSpec
+from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from trans import OpticalSystem, SimulatedUniverse, SurveySimulation, TimeKeeping
 
@@ -25,6 +25,47 @@ DOT_STYLES = {
     (-1, True):  ('#1f77b4', 'Successful detection'),
     ( 0, True):  ('#2ca02c', 'Successful characterization'),
     ( 0, False): ('#d62728', 'Failed characterization'),
+}
+
+# State machine diagram layout
+_STATE_POS = {
+    'unobserved':     (0.0, 1.0),
+    'detected':       (1.0, 1.0),
+    'orbit_found':    (2.0, 1.0),
+    'promoted':       (3.0, 1.0),
+    'characterizing': (4.0, 1.0),
+    'success':        (5.0, 1.0),
+    'retired':        (2.0, 0.0),
+}
+
+_ALL_TRANSITIONS = [
+    ('unobserved',     'detected'),
+    ('unobserved',     'retired'),
+    ('detected',       'orbit_found'),
+    ('orbit_found',    'promoted'),
+    ('promoted',       'characterizing'),
+    ('characterizing', 'success'),
+    ('characterizing', 'retired'),
+]
+
+_FULL_LABEL = {
+    'unobserved':     'unobserved',
+    'detected':       'detected',
+    'orbit_found':    'orbit\nfound',
+    'promoted':       'promoted',
+    'characterizing': 'charact-\nerizing',
+    'success':        'success',
+    'retired':        'retired',
+}
+
+_ABBREV = {
+    'unobserved':     'un',
+    'detected':       'de',
+    'orbit_found':    'or',
+    'promoted':       'pr',
+    'characterizing': 'ch',
+    'success':        'su',
+    'retired':        're',
 }
 
 
@@ -146,6 +187,97 @@ def make_trace_plot(survey, save_path='trace.png'):
     print(f"Saved to {save_path}")
 
 
+def _star_visits(survey, star_idx):
+    """Return (visited_states, taken_transitions) for one star."""
+    n_obs = len(survey.DRM)
+    seq = [survey.state_history[k][star_idx] for k in range(n_obs)]
+    seq.append(survey.stars[star_idx].state)
+    visited = set(seq)
+    taken = {(a, b) for a, b in zip(seq, seq[1:]) if a != b}
+    # orbit_found and promoted are transient — not captured in state_history
+    if 'detected' in visited and 'characterizing' in visited:
+        visited |= {'orbit_found', 'promoted'}
+        taken |= {('detected', 'orbit_found'), ('orbit_found', 'promoted'),
+                  ('promoted', 'characterizing')}
+    return visited, taken
+
+
+def _draw_fsm(ax, visited, taken, fontsize=7, shrink=8, mini=False):
+    """Draw a state machine diagram; visited/taken control fill and arrow weight."""
+    for src, dst in _ALL_TRANSITIONS:
+        x0, y0 = _STATE_POS[src]
+        x1, y1 = _STATE_POS[dst]
+        is_taken = (src, dst) in taken
+        ax.annotate(
+            '', xy=(x1, y1), xytext=(x0, y0),
+            arrowprops=dict(
+                arrowstyle='->',
+                color='#111' if is_taken else '#ddd',
+                lw=2.0 if is_taken else 0.7,
+                shrinkA=shrink, shrinkB=shrink,
+            ),
+            zorder=1,
+        )
+    for state, (x, y) in _STATE_POS.items():
+        label = _ABBREV[state] if mini else _FULL_LABEL[state]
+        is_visited = state in visited
+        ax.text(
+            x, y, label,
+            ha='center', va='center', fontsize=fontsize, zorder=3,
+            bbox=dict(
+                boxstyle='round,pad=0.3',
+                facecolor=STATE_COLORS[state] if is_visited else 'white',
+                edgecolor='#333' if is_visited else '#bbb',
+                linewidth=1.2 if is_visited else 0.5,
+            ),
+        )
+    ax.set_xlim(-0.6, 5.6)
+    ax.set_ylim(-0.6, 1.6)
+    ax.axis('off')
+
+
+def make_transition_plot(survey, save_path='transitions.png'):
+    n_star = survey.su.n_star
+    n_cols = 6
+    n_rows = (n_star + n_cols - 1) // n_cols
+
+    fig_h = 4.0 + n_rows * 2.0
+    fig_w = max(13.0, n_cols * 2.2)
+    fig = plt.figure(figsize=(fig_w, fig_h))
+
+    gs = GridSpec(
+        2, 1, figure=fig,
+        height_ratios=[4.0, n_rows * 2.0],
+        hspace=0.3,
+        top=0.95, bottom=0.02, left=0.01, right=0.99,
+    )
+
+    # Full machine
+    ax_full = fig.add_subplot(gs[0])
+    _draw_fsm(ax_full, set(STATES), set(_ALL_TRANSITIONS),
+              fontsize=9, shrink=14, mini=False)
+    ax_full.set_title('State Machine — All Transitions', fontsize=12, pad=8)
+
+    # Per-star grid
+    gs_stars = GridSpecFromSubplotSpec(
+        n_rows, n_cols, subplot_spec=gs[1], hspace=0.7, wspace=0.15,
+    )
+    for i in range(n_star):
+        ax = fig.add_subplot(gs_stars[i // n_cols, i % n_cols])
+        visited, taken = _star_visits(survey, i)
+        _draw_fsm(ax, visited, taken, fontsize=5, shrink=5, mini=True)
+        final = _ABBREV[survey.stars[i].state]
+        ax.set_title(f'Star {i} [{final}]', fontsize=6, pad=1)
+
+    for i in range(n_star, n_rows * n_cols):
+        ax = fig.add_subplot(gs_stars[i // n_cols, i % n_cols])
+        ax.axis('off')
+
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Saved to {save_path}")
+
+
 def main():
     su = SimulatedUniverse(eta=0.4)
     opt = OpticalSystem(su)
@@ -153,6 +285,7 @@ def main():
     survey = SurveySimulation(su, opt, tk)
     survey.run_sim()
     make_trace_plot(survey)
+    make_transition_plot(survey)
 
 
 if __name__ == '__main__':
