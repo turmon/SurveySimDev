@@ -26,10 +26,10 @@ STATE_COLORS = {
 }
 
 DOT_STYLES = {
-    (-1, False): ('black',   'Failed detection'),
-    (-1, True):  ('#1f77b4', 'Successful detection'),
-    ( 0, True):  ('#2ca02c', 'Successful characterization'),
-    ( 0, False): ('#d62728', 'Failed characterization'),
+    (-1, True):  ('#1f77b4', 'Det: Success'),
+    (-1, False): ('black',   'Det: Fail'),
+    ( 0, True):  ('#2ca02c', 'Char: Success'),
+    ( 0, False): ('#d62728', 'Char: Fail'),
 }
 
 # State machine diagram layout
@@ -129,22 +129,26 @@ def make_trace_plot(survey, save_path='trace.png'):
         interpolation='nearest',
     )
 
-    # Observation dots
+    # Observation dots; delay entries (mode=None) get a full-height tick instead
     for k, obs in enumerate(DRM):
-        color, _ = DOT_STYLES.get((obs['mode'], obs['success']),
-                                   DOT_STYLES[(0, obs['success'])])
-        ax_main.plot(
-            k, obs['star_num'], 'o',
-            color=color, markersize=4,
-            markeredgewidth=0.3, markeredgecolor='white',
-            zorder=3,
-        )
+        if obs['mode'] is None:
+            ax_main.axvline(k, color='#888888', linewidth=0.6,
+                            linestyle=':', alpha=0.7, zorder=2)
+        else:
+            color, _ = DOT_STYLES.get((obs['mode'], obs['success']),
+                                       DOT_STYLES[(0, obs['success'])])
+            ax_main.plot(
+                k, obs['star_num'], 'o',
+                color=color, markersize=4,
+                markeredgewidth=0.3, markeredgecolor='white',
+                zorder=3,
+            )
 
     # Y-axis: star number + earth count
     earths = survey.su.earths
     ax_main.set_yticks(range(n_star))
-    ax_main.set_yticklabels([f"{i} (e={earths[i]})" for i in range(n_star)], fontsize=7)
-    ax_main.set_ylabel('Star')
+    ax_main.set_yticklabels([f"{i} - ({earths[i]})" for i in range(n_star)], fontsize=7)
+    ax_main.set_ylabel('Star Number - (Earth Count)')
 
     # Primary X-axis
     x_step = max(1, n_obs // 10)
@@ -180,7 +184,7 @@ def make_trace_plot(survey, save_path='trace.png'):
     ]
     ax_main.legend(
         handles=state_patches + dot_handles,
-        loc='lower right', fontsize=7, ncol=2,
+        loc='lower left', fontsize=7, ncol=2,
         framealpha=0.9, edgecolor='#ccc',
     )
 
@@ -198,7 +202,7 @@ def make_trace_plot(survey, save_path='trace.png'):
             final = survey.stars[i].state
             if final == 'partial':
                 ax_side.plot(0.5, i, 'P', color='black',
-                             markersize=6, zorder=4)
+                             markersize=5, zorder=4)
             elif final != 'success':
                 ax_side.plot(0.5, i, 'x', color='red',
                              markersize=7, markeredgewidth=1.5, zorder=4)
@@ -293,7 +297,7 @@ def make_transition_plot(survey, save_path='transitions.png'):
         visited, taken = _star_visits(survey, i)
         _draw_fsm(ax, visited, taken, fontsize=5, shrink=5, mini=True)
         final = _ABBREV[survey.stars[i].state]
-        ax.set_title(f'Star {i} [{final}]', fontsize=6, pad=1)
+        ax.set_title(f'Star {i} [{final}]', fontsize=8, pad=1)
 
     for i in range(n_star, n_rows * n_cols):
         ax = fig.add_subplot(gs_stars[i // n_cols, i % n_cols])

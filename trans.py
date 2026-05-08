@@ -188,7 +188,8 @@ class SurveySimulation:
         transitions_spec = [
             {'trigger': 'first_detection',   'source': 'unobserved',  'dest': 'detected'},
             {'trigger': 'give_up_detection', 'source': 'unobserved',  'dest': 'retired'},
-            {'trigger': 'find_orbit',        'source': 'detected',    'dest': 'orbit_found',  'conditions': ['has_orbit', 'has_sufficient_gap']},
+            {'trigger': 'find_orbit',        'source': 'detected',    'dest': 'orbit_found',
+                 'conditions': ['has_orbit', 'has_sufficient_gap']},
             {'trigger': 'promote',           'source': 'orbit_found', 'dest': 'promoted'},
             {'trigger': 'start_char',        'source': 'promoted',    'dest': 'char_vis'},
             {'trigger': 'advance_char_vis',  'source': 'char_vis',    'dest': 'char_nuv',     'conditions': 'vis_char_succeeded'},
@@ -197,7 +198,8 @@ class SurveySimulation:
             {'trigger': 'retire_nuv',        'source': 'char_nuv',    'dest': 'retired',      'conditions': 'nuv_char_exhausted'},
             {'trigger': 'succeed',           'source': 'char_nir',    'dest': 'success',      'conditions': 'all_char_succeeded'},
             {'trigger': 'retire_nir',        'source': 'char_nir',    'dest': 'retired',      'conditions': 'nir_char_exhausted'},
-            {'trigger': 'go_partial',        'source': ['char_vis', 'char_nuv', 'char_nir'], 'dest': 'partial', 'conditions': 'is_partial_success'},
+            {'trigger': 'go_partial',        'source': ['char_vis', 'char_nuv', 'char_nir'], 'dest': 'partial',
+                'conditions': 'is_partial_success'},
         ]
         self._machine = Machine(
             model=self.stars,
@@ -234,34 +236,35 @@ class SurveySimulation:
             best = max(det_cands,
                        key=lambda s: s.det_comp / self.os.calc_intTime(s.star_num))
             return best, -1
-
+        # no targets
         return None, None
 
     def observation_detection(self, star):
         int_time = self.os.calc_intTime(star.star_num)
+        t0 = self.tk.current_time
         self.tk.allocate(int_time)
-        self.state_history.append([s.state for s in self.stars])
         star.n_det += 1
         star.t_det_attempt = self.tk.current_time
         det_ok = bool(np.any(self._rng.random(size=(star.earths,)) < star.det_comp))
         if det_ok:
             star.n_det_ok += 1
             if star.t_det_first is None:
-                star.t_det_first = self.tk.current_time
-            star.t_det_last = self.tk.current_time
+                star.t_det_first = t0
+            star.t_det_last = t0
             if star.is_unobserved():
                 star.first_detection()
         if star.is_unobserved() and star.detection_exhausted():
             star.give_up_detection()
         star.find_orbit()
-        self.DRM.append({'star_num': star.star_num, 'mode': -1,
-                         'success': det_ok, 't': self.tk.current_time,
-                         'int_time': int_time})
+        drm = {'star_num': star.star_num, 'mode': -1,
+                         'success': det_ok, 't': t0,
+                         'int_time': int_time}
+        return drm
 
     def observation_characterization(self, star, mode):
         int_time = self.os.calc_intTime(star.star_num, mode)
+        t0 = self.tk.current_time
         self.tk.allocate(int_time)
-        self.state_history.append([s.state for s in self.stars])
         star.n_char[mode] += 1
         char_ok = bool(np.any(self._rng.random(size=(star.earths,)) < star.char_comp[mode]))
         if char_ok:
@@ -275,48 +278,59 @@ class SurveySimulation:
         elif mode == MODE_NIR:
             star.succeed()
             star.retire_nir()
-        self.DRM.append({'star_num': star.star_num, 'mode': mode,
-                         'success': char_ok, 't': self.tk.current_time,
-                         'int_time': int_time})
+        drm = {'star_num': star.star_num, 'mode': mode,
+                         'success': char_ok, 't': t0,
+                         'int_time': int_time}
+        return drm
 
     def observation_advance(self):
         active = [s for s in self.stars if not s.is_retired() and not s.is_success()]
         if not active:
             return False
+        t0 = self.tk.current_time
         blocked = [s for s in active
                    if s.t_det_attempt is not None
-                   and self.tk.current_time - s.t_det_attempt < REVISIT_WAIT]
+                   and t0 - s.t_det_attempt < REVISIT_WAIT]
         if not blocked:
-            return False
+            return None
         next_open = min(s.t_det_attempt + REVISIT_WAIT for s in blocked)
-        self.tk.allocate(next_open - self.tk.current_time)
-        return True
+        dt = next_open - t0
+        self.tk.allocate(dt)
+        drm = {'star_num': None, 'mode': None,
+                         'success': True, 't': t0,
+                         'int_time': dt}
+        return drm
 
     def run_sim(self):
         n = self.su.n_star
         print(f"=== Star Observation Survey Simulation ({n} stars, eta={self.su.eta:.2f}) ===\n")
 
         while not self.tk.finished():
-            # Step 1: resolve transient states
+            # 1/ resolve transient states
             for star in self.stars:
                 if star.is_orbit_found():
                     star.promote()
                 if star.is_promoted():
                     star.start_char()
 
-            # Step 2: get next target
+            # 2/ get next target
             star, mode = self.next_target()
 
-            # Step 3: handle idle or execute observation
-            if star is None:
-                if not self.observation_advance():
-                    break
-                continue
-
-            if mode == -1:
-                self.observation_detection(star)
+            # 3/ execute observation or time-advance
+            if mode is None:
+                drm = self.observation_advance()
+                if not drm:
+                    break # nothing more to do
+            elif mode == -1:
+                drm = self.observation_detection(star)
             elif mode >= 0:
-                self.observation_characterization(star, mode)
+                drm = self.observation_characterization(star, mode)
+            else:
+                raise RuntimeError('Bad mode')
+
+            # 4/ Bookkeeping
+            self.DRM.append(drm)
+            self.state_history.append([s.state for s in self.stars])
 
         # End-of-mission: mark stars with partial char success
         for star in self.stars:
