@@ -377,11 +377,95 @@ def make_machine_doc_plot(survey, save_path='machine.png'):
     print(f"Saved to {save_path}")
 
 
+def make_strip_plot(survey, save_path='strip.png'):
+    DRM = survey.DRM
+    if not DRM:
+        print("No observations recorded.")
+        return
+
+    YEAR = 365.25
+    N_YEARS = 5
+    ADVANCE_COLOR = '#cccccc'
+    STRIP_H = 0.6
+
+    fig, axes = plt.subplots(N_YEARS, 1, sharex=True, figsize=(14, 7))
+    fig.subplots_adjust(hspace=0.08, left=0.10, right=0.97, top=0.95, bottom=0.08)
+
+    for k, obs in enumerate(DRM):
+        t_start = obs['t']
+        t_end   = t_start + obs['int_time']
+        t_mid   = (t_start + t_end) / 2
+
+        # Bar color
+        if obs['mode'] is None:
+            color = ADVANCE_COLOR
+        else:
+            state = survey.state_history[k][obs['star_num']]
+            color = STATE_COLORS[state]
+
+        # Categorical y-position
+        if obs['mode'] is None:
+            y_cat = 0   # Advance
+        elif obs['mode'] == -1:
+            y_cat = 2   # Det
+        else:
+            y_cat = 1   # Char
+
+        # Draw bar segment(s), splitting at year boundaries
+        for yr in range(N_YEARS):
+            yr_t0 = yr * YEAR
+            yr_t1 = (yr + 1) * YEAR
+            seg_start = max(t_start, yr_t0) - yr_t0
+            seg_end   = min(t_end,   yr_t1) - yr_t0
+            if seg_start >= seg_end:
+                continue
+            axes[yr].barh(y_cat, seg_end - seg_start, left=seg_start,
+                          height=STRIP_H, color=color, alpha=0.7, edgecolor='none')
+
+            # Success/fail dot — only for non-delay entries, only in the year
+            # containing the temporal midpoint of the full (un-clipped) bar
+            if obs['mode'] is not None and yr_t0 <= t_mid < yr_t1:
+                dot_color = '#2ca02c' if obs['success'] else '#d62728'
+                axes[yr].plot(t_mid - yr_t0, y_cat, 'o',
+                              color=dot_color, markersize=3, zorder=3)
+
+    for i, ax in enumerate(axes):
+        ax.set_yticks([0, 1, 2])
+        ax.set_yticklabels(['Advance', 'Char', 'Det'])
+        ax.set_ylabel(f'Year {i + 1}', rotation=0, labelpad=42, va='center')
+        ax.set_ylim(-0.5, 2.5)
+        ax.grid(axis='x', linewidth=0.3, alpha=0.5)
+
+    axes[0].set_xlim(0, YEAR)
+    axes[-1].set_xlabel('Mission time [d]')
+
+    # Legend on Year 5 panel, lower left
+    state_patches = [
+        mpatches.Patch(facecolor=STATE_COLORS[s], alpha=0.7, edgecolor='none',
+                       label=s.replace('_', ' '))
+        for s in STATES
+    ]
+    dot_handles = [
+        plt.Line2D([0], [0], marker='o', linestyle='none',
+                   color='#2ca02c', markersize=5, label='Success'),
+        plt.Line2D([0], [0], marker='o', linestyle='none',
+                   color='#d62728', markersize=5, label='Fail'),
+    ]
+    axes[-1].legend(handles=state_patches + dot_handles,
+                    loc='lower left', fontsize=7, ncol=2,
+                    framealpha=0.9, edgecolor='#ccc')
+
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved to {save_path}")
+
+
 def main():
     survey = run_one()
     make_trace_plot(survey)
     make_transition_plot(survey)
     make_machine_doc_plot(survey)
+    make_strip_plot(survey)
 
 
 if __name__ == '__main__':
