@@ -386,10 +386,13 @@ def make_strip_plot(survey, save_path='strip.png'):
     YEAR = 365.25
     N_YEARS = 5
     ADVANCE_COLOR = '#cccccc'
-    STRIP_H = 0.6
+    STRIP_H = 0.45
 
     fig, axes = plt.subplots(N_YEARS, 1, sharex=True, figsize=(14, 7))
     fig.subplots_adjust(hspace=0.08, left=0.10, right=0.97, top=0.95, bottom=0.08)
+
+    det_label_idx  = 0   # counts det  observations for above/below alternation
+    char_label_idx = 0   # counts char observations for above/below alternation
 
     for k, obs in enumerate(DRM):
         t_start = obs['t']
@@ -403,13 +406,18 @@ def make_strip_plot(survey, save_path='strip.png'):
             state = survey.state_history[k][obs['star_num']]
             color = STATE_COLORS[state]
 
-        # Categorical y-position
+        # Categorical y-position; label index for above/below alternation
         if obs['mode'] is None:
             y_cat = 0   # Advance
+            label_idx = None
         elif obs['mode'] == -1:
             y_cat = 2   # Det
+            label_idx = det_label_idx
+            det_label_idx += 1
         else:
             y_cat = 1   # Char
+            label_idx = char_label_idx
+            char_label_idx += 1
 
         # Draw bar segment(s), splitting at year boundaries
         for yr in range(N_YEARS):
@@ -427,12 +435,20 @@ def make_strip_plot(survey, save_path='strip.png'):
             if obs['mode'] is not None and yr_t0 <= t_mid < yr_t1:
                 dot_color = '#2ca02c' if obs['success'] else '#d62728'
                 axes[yr].plot(t_mid - yr_t0, y_cat, 'o',
-                              color=dot_color, markersize=3, zorder=3)
+                              color=dot_color, markersize=3.75, zorder=3,
+                              markeredgecolor='black', markeredgewidth=0.5)
+                # Star number: alternate above (even index) / below (odd index)
+                above = (label_idx % 2 == 0)
+                axes[yr].text(t_mid - yr_t0,
+                              y_cat + (0.28 if above else -0.28),
+                              str(obs['star_num']),
+                              ha='center', va='bottom' if above else 'top',
+                              fontsize=5, zorder=4)
 
     for i, ax in enumerate(axes):
         ax.set_yticks([0, 1, 2])
-        ax.set_yticklabels(['Advance', 'Char', 'Det'])
-        ax.set_ylabel(f'Year {i + 1}', rotation=0, labelpad=42, va='center')
+        ax.set_yticklabels(['Astro', 'Char', 'Det'])
+        ax.set_ylabel(f'Year {i + 1}')
         ax.set_ylim(-0.5, 2.5)
         ax.grid(axis='x', linewidth=0.3, alpha=0.5)
 
