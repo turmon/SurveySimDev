@@ -114,10 +114,6 @@ class StarInfo:
         '''NIR attempts exhausted with no success'''
         return self.n_char[MODE_NIR] >= MAX_CHAR and self.n_char_ok[MODE_NIR] == 0
 
-    def is_partial_success(self):
-        '''Some but not all char modes succeeded at mission end'''
-        return bool(np.any(self.n_char_ok >= 1) and not np.all(self.n_char_ok >= 1))
-
     def detection_exhausted(self):
         '''No more det attempts allowed (0 successes)'''
         return self.n_det >= MAX_DET and self.n_det_ok == 0
@@ -212,7 +208,7 @@ class SurveySimulation:
             {'trigger': 'succeed',           'source': 'char_nir',   'dest': 'success',   'conditions': 'all_char_succeeded'},
             {'trigger': 'retire_nir',        'source': 'char_nir',   'dest': 'retired',   'conditions': 'nir_char_exhausted'},
             {'trigger': 'end_mission', 'source': ['char_nuv', 'char_nir'], 'dest': 'partial',
-                'conditions': ['mission_ended', 'is_partial_success']},
+                'conditions': ['mission_ended']},
             {'trigger': 'end_mission', 'source': ['orbit_det', 'char_vis'], 'dest': 'found',
                 'conditions': ['mission_ended']},
             {'trigger': 'end_mission', 'source': 'observing', 'dest': 'unknown',
