@@ -2,8 +2,8 @@ import numpy as np
 from transitions import Machine
 
 MISSION_DURATION = 5 * 365.25   # days
-MAX_DET = 3     # failed detection attempts before retiring an unobserved star
-MAX_CHAR = 3    # characterization attempts per mode before retiring
+MAX_DET = 4     # failed detection attempts before retiring an unobserved star
+MAX_CHAR = 2    # characterization attempts per mode before retiring
 REVISIT_WAIT = 0.3 * 365.25    # days — min gap after any detection attempt before re-observing
 GAP_REQUIRED = 0.5 * 365.25    # days — min temporal baseline (t_det_last - t_det_first) for orbit
 
@@ -118,26 +118,26 @@ class StarInfo:
         return bool(np.any(self.n_char_ok >= 1) and not np.all(self.n_char_ok >= 1))
 
     def detection_exhausted(self):
-        '''No more det attempts allowed'''
+        '''No more det attempts allowed (0 successes)'''
         return self.n_det >= MAX_DET and self.n_det_ok == 0
+
+    def orbit_det_exhausted(self):
+        '''Detection attempts exhausted without reaching orbit (3 successes)'''
+        return self.n_det >= MAX_DET and not self.has_orbit()
 
     # --- state-entry callbacks auto-discovered by transitions ---
 
-    def on_enter_detected(self):
-        print(f"  Star {self.star_num:2d}: unobserved  -> DETECTED       "
-              f"(n_det_ok={self.n_det_ok}, det_comp={self.det_comp:.2f}, "
-              f"t={self.t_det_first:.1f}d)")
+    def on_enter_observing(self):
+        print(f"  Star {self.star_num:2d}: unobserved  -> OBSERVING      "
+              f"(det_comp={self.det_comp:.2f})")
 
-    def on_enter_orbit_found(self):
-        print(f"  Star {self.star_num:2d}: detected    -> ORBIT_FOUND    "
-              f"(n_det_ok={self.n_det_ok}, t={self.t_det_last:.1f}d)")
-
-    def on_enter_promoted(self):
-        print(f"  Star {self.star_num:2d}: orbit_found -> PROMOTED        "
-              f"(earths={self.earths})")
+    def on_enter_orbit_det(self):
+        print(f"  Star {self.star_num:2d}: observing   -> ORBIT_DET      "
+              f"(n_det_ok={self.n_det_ok}, t={self.t_det_first:.1f}d)")
 
     def on_enter_char_vis(self):
-        print(f"  Star {self.star_num:2d}: promoted    -> CHAR_VIS")
+        print(f"  Star {self.star_num:2d}: orbit_det   -> CHAR_VIS       "
+              f"(earths={self.earths})")
 
     def on_enter_char_nuv(self):
         print(f"  Star {self.star_num:2d}: char_vis    -> CHAR_NUV       "
@@ -186,24 +186,24 @@ class SurveySimulation:
 
     def _build_machines(self):
         transitions_spec = [
-            {'trigger': 'first_detection',   'source': 'unobserved',  'dest': 'detected'},
-            {'trigger': 'give_up_detection', 'source': 'unobserved',  'dest': 'retired'},
-            {'trigger': 'find_orbit',        'source': 'detected',    'dest': 'orbit_found',
+            {'trigger': 'begin_obs',         'source': 'unobserved', 'dest': 'observing'},
+            {'trigger': 'first_det_success', 'source': 'observing',  'dest': 'orbit_det'},
+            {'trigger': 'give_up_obs',       'source': 'observing',  'dest': 'retired'},
+            {'trigger': 'find_orbit',        'source': 'orbit_det',  'dest': 'char_vis',
                  'conditions': ['has_orbit', 'has_sufficient_gap']},
-            {'trigger': 'promote',           'source': 'orbit_found', 'dest': 'promoted'},
-            {'trigger': 'start_char',        'source': 'promoted',    'dest': 'char_vis'},
-            {'trigger': 'advance_char_vis',  'source': 'char_vis',    'dest': 'char_nuv',     'conditions': 'vis_char_succeeded'},
-            {'trigger': 'retire_vis',        'source': 'char_vis',    'dest': 'retired',      'conditions': 'vis_char_exhausted'},
-            {'trigger': 'advance_char_nuv',  'source': 'char_nuv',    'dest': 'char_nir',     'conditions': 'nuv_char_succeeded'},
-            {'trigger': 'retire_nuv',        'source': 'char_nuv',    'dest': 'retired',      'conditions': 'nuv_char_exhausted'},
-            {'trigger': 'succeed',           'source': 'char_nir',    'dest': 'success',      'conditions': 'all_char_succeeded'},
-            {'trigger': 'retire_nir',        'source': 'char_nir',    'dest': 'retired',      'conditions': 'nir_char_exhausted'},
-            {'trigger': 'go_partial',        'source': ['char_vis', 'char_nuv', 'char_nir'], 'dest': 'partial',
+            {'trigger': 'give_up_orbit_det', 'source': 'orbit_det',  'dest': 'retired'},
+            {'trigger': 'advance_char_vis',  'source': 'char_vis',   'dest': 'char_nuv',  'conditions': 'vis_char_succeeded'},
+            {'trigger': 'retire_vis',        'source': 'char_vis',   'dest': 'retired',   'conditions': 'vis_char_exhausted'},
+            {'trigger': 'advance_char_nuv',  'source': 'char_nuv',   'dest': 'char_nir',  'conditions': 'nuv_char_succeeded'},
+            {'trigger': 'retire_nuv',        'source': 'char_nuv',   'dest': 'retired',   'conditions': 'nuv_char_exhausted'},
+            {'trigger': 'succeed',           'source': 'char_nir',   'dest': 'success',   'conditions': 'all_char_succeeded'},
+            {'trigger': 'retire_nir',        'source': 'char_nir',   'dest': 'retired',   'conditions': 'nir_char_exhausted'},
+            {'trigger': 'go_partial',        'source': ['char_nuv', 'char_nir'], 'dest': 'partial',
                 'conditions': 'is_partial_success'},
         ]
         self._machine = Machine(
             model=self.stars,
-            states=['unobserved', 'detected', 'orbit_found', 'promoted',
+            states=['unobserved', 'observing', 'orbit_det',
                     'char_vis', 'char_nuv', 'char_nir', 'success', 'partial', 'retired'],
             transitions=transitions_spec,
             initial='unobserved',
@@ -212,7 +212,7 @@ class SurveySimulation:
         )
 
     def _det_eligible(self, star):
-        if not (star.is_unobserved() or star.is_detected()):
+        if not (star.is_unobserved() or star.is_observing() or star.is_orbit_det()):
             return False
         if star.t_det_attempt is None:
             return True
@@ -246,16 +246,20 @@ class SurveySimulation:
         star.n_det += 1
         star.t_det_attempt = self.tk.current_time
         det_ok = bool(np.any(self._rng.random(size=(star.earths,)) < star.det_comp))
+        if star.is_unobserved():
+            star.begin_obs()                        # unobserved → observing
         if det_ok:
             star.n_det_ok += 1
             if star.t_det_first is None:
                 star.t_det_first = t0
             star.t_det_last = t0
-            if star.is_unobserved():
-                star.first_detection()
-        if star.is_unobserved() and star.detection_exhausted():
-            star.give_up_detection()
-        star.find_orbit()
+            if star.is_observing():
+                star.first_det_success()            # observing → orbit_det
+        if star.is_observing() and star.detection_exhausted():
+            star.give_up_obs()                      # observing → retired (0 successes)
+        if star.is_orbit_det() and star.orbit_det_exhausted():
+            star.give_up_orbit_det()                # orbit_det → retired (< 3 successes)
+        star.find_orbit()                           # orbit_det → char_vis if conditions met
         drm = {'star_num': star.star_num, 'mode': -1,
                          'success': det_ok, 't': t0,
                          'int_time': int_time}
@@ -306,12 +310,9 @@ class SurveySimulation:
         print(f"=== Star Observation Survey Simulation ({n} stars, eta={self.su.eta:.2f}) ===\n")
 
         while not self.tk.finished():
-            # 1/ resolve transient states
-            for star in self.stars:
-                if star.is_orbit_found():
-                    star.promote()
-                if star.is_promoted():
-                    star.start_char()
+            # Bookkeeping
+            # -- why here? initial state is the cause of the observation chosen
+            self.state_history.append([s.state for s in self.stars])
 
             # 2/ get next target
             star, mode = self.next_target()
@@ -328,9 +329,9 @@ class SurveySimulation:
             else:
                 raise RuntimeError('Bad mode')
 
-            # 4/ Bookkeeping
+            # Bookkeeping
+            # -- why here? record action chosen
             self.DRM.append(drm)
-            self.state_history.append([s.state for s in self.stars])
 
         # End-of-mission: mark stars with partial char success
         for star in self.stars:
