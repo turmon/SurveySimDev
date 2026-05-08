@@ -61,11 +61,11 @@ _TRANSITIONS_FULL = [
     {'src': 'char_nuv',   'dst': 'retired',    'trigger': 'retire_nuv',        'conditions': ['nuv_char_exhausted']},
     {'src': 'char_nir',   'dst': 'success',    'trigger': 'succeed',           'conditions': ['all_char_succeeded']},
     {'src': 'char_nir',   'dst': 'retired',    'trigger': 'retire_nir',        'conditions': ['nir_char_exhausted']},
-    {'src': 'char_nuv',   'dst': 'partial',    'trigger': 'go_partial',        'conditions': ['is_partial_success']},
-    {'src': 'char_nir',   'dst': 'partial',    'trigger': 'go_partial',        'conditions': ['is_partial_success']},
-    {'src': 'orbit_det',  'dst': 'found',      'trigger': 'go_found',          'conditions': []},
-    {'src': 'char_vis',   'dst': 'found',      'trigger': 'go_found',          'conditions': []},
-    {'src': 'observing',  'dst': 'unknown',    'trigger': 'go_unknown',        'conditions': []},
+    {'src': 'char_nuv',   'dst': 'partial',    'trigger': 'end_mission',       'conditions': ['mission_ended', 'is_partial_success']},
+    {'src': 'char_nir',   'dst': 'partial',    'trigger': 'end_mission',       'conditions': ['mission_ended', 'is_partial_success']},
+    {'src': 'orbit_det',  'dst': 'found',      'trigger': 'end_mission',       'conditions': ['mission_ended']},
+    {'src': 'char_vis',   'dst': 'found',      'trigger': 'end_mission',       'conditions': ['mission_ended']},
+    {'src': 'observing',  'dst': 'unknown',    'trigger': 'end_mission',       'conditions': ['mission_ended']},
 ]
 _ALL_TRANSITIONS = [(t['src'], t['dst']) for t in _TRANSITIONS_FULL]
 
@@ -368,7 +368,7 @@ def make_machine_doc_plot(survey, save_path='machine.png'):
     lines = ['Guard conditions\n' + '─' * 48]
     for name in cond_names:
         method = getattr(StarInfo, name, None)
-        doc = (inspect.getdoc(method) or '').splitlines()[0] if method else ''
+        doc = next(iter((inspect.getdoc(method) or '').splitlines()), '') if method else ''
         lines.append(f'{name.ljust(col_w)}{doc}')
 
     ax_doc.text(0.02, 0.95, '\n'.join(lines),
