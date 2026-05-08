@@ -156,6 +156,14 @@ class StarInfo:
         counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(N_MODE))
         print(f"  Star {self.star_num:2d}: -> PARTIAL  (char ok/att=[{counts}])")
 
+    def on_enter_found(self):
+        print(f"  Star {self.star_num:2d}: -> FOUND    "
+              f"(n_det_ok={self.n_det_ok}/{self.n_det})")
+
+    def on_enter_unknown(self):
+        print(f"  Star {self.star_num:2d}: -> UNKNOWN  "
+              f"({self.n_det} det attempts, 0 successes)")
+
     def on_enter_retired(self):
         if np.any(self.n_char > 0):
             counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(N_MODE))
@@ -198,13 +206,16 @@ class SurveySimulation:
             {'trigger': 'retire_nuv',        'source': 'char_nuv',   'dest': 'retired',   'conditions': 'nuv_char_exhausted'},
             {'trigger': 'succeed',           'source': 'char_nir',   'dest': 'success',   'conditions': 'all_char_succeeded'},
             {'trigger': 'retire_nir',        'source': 'char_nir',   'dest': 'retired',   'conditions': 'nir_char_exhausted'},
-            {'trigger': 'go_partial',        'source': ['char_nuv', 'char_nir'], 'dest': 'partial',
+            {'trigger': 'go_partial',  'source': ['char_nuv', 'char_nir'],      'dest': 'partial',
                 'conditions': 'is_partial_success'},
+            {'trigger': 'go_found',   'source': ['orbit_det', 'char_vis'],     'dest': 'found'},
+            {'trigger': 'go_unknown', 'source': 'observing',                   'dest': 'unknown'},
         ]
         self._machine = Machine(
             model=self.stars,
             states=['unobserved', 'observing', 'orbit_det',
-                    'char_vis', 'char_nuv', 'char_nir', 'success', 'partial', 'retired'],
+                    'char_vis', 'char_nuv', 'char_nir', 'success', 'partial',
+                    'found', 'unknown', 'retired'],
             transitions=transitions_spec,
             initial='unobserved',
             ignore_invalid_triggers=True,
@@ -333,9 +344,11 @@ class SurveySimulation:
             # -- why here? record action chosen
             self.DRM.append(drm)
 
-        # End-of-mission: mark stars with partial char success
+        # End-of-mission sweeps
         for star in self.stars:
-            star.go_partial()
+            star.go_partial()   # char_nuv/char_nir with some success → partial
+            star.go_found()     # orbit_det/char_vis → found
+            star.go_unknown()   # observing → unknown
         self.state_history.append([s.state for s in self.stars])
         self._print_summary()
 

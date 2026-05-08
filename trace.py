@@ -10,7 +10,8 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from trans import StarInfo, run_one
 
 STATES = ['unobserved', 'observing', 'orbit_det',
-          'char_vis', 'char_nuv', 'char_nir', 'success', 'partial', 'retired']
+          'char_vis', 'char_nuv', 'char_nir', 'success', 'partial',
+          'found', 'unknown', 'retired']
 
 STATE_COLORS = {
     'unobserved': '#f5f5f5',
@@ -21,6 +22,8 @@ STATE_COLORS = {
     'char_nir':   '#fc8d59',   # orange (NIR)
     'success':    '#006d2c',
     'partial':    '#a1d99b',   # light green — some modes succeeded
+    'found':      '#fec44f',   # warm yellow — detected, not fully characterised
+    'unknown':    '#c6dbef',   # very light blue — observed but no successful detection
     'retired':    '#969696',
 }
 
@@ -40,8 +43,10 @@ _STATE_POS = {
     'char_nuv':   (4.0, 1.0),
     'char_nir':   (5.0, 1.0),
     'success':    (6.0, 1.0),
-    'retired':    (3.0, 0.0),
-    'partial':    (5.0, 0.0),
+    'unknown':    (1.0, 0.0),
+    'found':      (2.5, 0.0),
+    'retired':    (4.0, 0.0),
+    'partial':    (5.5, 0.0),
 }
 
 _TRANSITIONS_FULL = [
@@ -58,6 +63,9 @@ _TRANSITIONS_FULL = [
     {'src': 'char_nir',   'dst': 'retired',    'trigger': 'retire_nir',        'conditions': ['nir_char_exhausted']},
     {'src': 'char_nuv',   'dst': 'partial',    'trigger': 'go_partial',        'conditions': ['is_partial_success']},
     {'src': 'char_nir',   'dst': 'partial',    'trigger': 'go_partial',        'conditions': ['is_partial_success']},
+    {'src': 'orbit_det',  'dst': 'found',      'trigger': 'go_found',          'conditions': []},
+    {'src': 'char_vis',   'dst': 'found',      'trigger': 'go_found',          'conditions': []},
+    {'src': 'observing',  'dst': 'unknown',    'trigger': 'go_unknown',        'conditions': []},
 ]
 _ALL_TRANSITIONS = [(t['src'], t['dst']) for t in _TRANSITIONS_FULL]
 
@@ -70,6 +78,8 @@ _FULL_LABEL = {
     'char_nir':   'char\nNIR',
     'success':    'success',
     'partial':    'partial',
+    'found':      'found',
+    'unknown':    'unknown',
     'retired':    'retired',
 }
 
@@ -82,6 +92,8 @@ _ABBREV = {
     'char_nir':   'ci',
     'success':    'su',
     'partial':    'pa',
+    'found':      'fo',
+    'unknown':    'uk',
     'retired':    're',
 }
 
@@ -225,6 +237,7 @@ def _star_visits(survey, star_idx):
 
 def _draw_fsm(ax, visited, taken, fontsize=7, shrink=8, mini=False):
     """Draw a state machine diagram; visited/taken control fill and arrow weight."""
+    lw = 1.5 if mini else 2.0
     for src, dst in _ALL_TRANSITIONS:
         x0, y0 = _STATE_POS[src]
         x1, y1 = _STATE_POS[dst]
@@ -234,7 +247,7 @@ def _draw_fsm(ax, visited, taken, fontsize=7, shrink=8, mini=False):
             arrowprops=dict(
                 arrowstyle='->',
                 color='#111' if is_taken else '#ddd',
-                lw=2.0 if is_taken else 0.7,
+                lw=lw if is_taken else 0.7,
                 shrinkA=shrink, shrinkB=shrink,
             ),
             zorder=1,
@@ -252,7 +265,7 @@ def _draw_fsm(ax, visited, taken, fontsize=7, shrink=8, mini=False):
                 linewidth=1.2 if is_visited else 0.5,
             ),
         )
-    ax.set_xlim(-0.6, 6.6)
+    ax.set_xlim(-0.6, 7.0)
     ax.set_ylim(-0.6, 1.6)
     ax.axis('off')
 
@@ -286,7 +299,7 @@ def make_transition_plot(survey, save_path='transitions.png'):
     for i in range(n_star):
         ax = fig.add_subplot(gs_stars[i // n_cols, i % n_cols])
         visited, taken = _star_visits(survey, i)
-        _draw_fsm(ax, visited, taken, fontsize=5, shrink=5, mini=True)
+        _draw_fsm(ax, visited, taken, fontsize=5, shrink=4, mini=True)
         final = _ABBREV[survey.stars[i].state]
         ax.set_title(f'Star {i} [{final}]', fontsize=8, pad=1)
 
