@@ -5,27 +5,106 @@
 import numpy as np
 from transitions import Machine
 
-MISSION_DURATION = 5 * 365.25   # days
 MAX_DET = 4     # failed detection attempts before retiring an unobserved star
 MAX_CHAR = 2    # characterization attempts per mode before retiring
-REVISIT_WAIT = 0.3 * 365.25    # days -- min gap after any detection attempt before re-observing
-GAP_REQUIRED = 0.5 * 365.25    # days -- min temporal baseline (t_det_last - t_det_first) for orbit
 
 N_MODE = 3
 MODE_VIS, MODE_NUV, MODE_NIR = 0, 1, 2
 CHAR_INT_FACTORS = [1.2, 1.0, 2.0]   # intTime multiplier per char mode [vis, nuv, nir]
 COMP_FACTORS     = [0.8, 0.9, 0.5]   # lower bound of char completeness per mode
-MAX_INT_TIME     = 60.0               # days -- char observations longer than this are skipped
+specs = {
+    'eta':          0.4,             # mean number of earths per star
+    'missionLife':  5 * 365.25,      # days -- total mission duration
+    'n_star':       30,              # number of stars in the simulated catalog
+    'seed':         0,              # RNG seed; 0 means unseeded (random)
+    'tintmax':      60.0,            # days -- skip char observations longer than this
+    'revisit_wait': 0.3 * 365.25,   # days -- min gap after any detection attempt
+    'gap_required': 0.5 * 365.25,   # days -- min temporal baseline for orbit determination
+    'obs_overhead':  0.2,            # days -- overhead added to every observation
+    'char_overhead': 0.8,            # days -- additional overhead for characterizations
+    'state_initial': {'*': 'unobserved'},
+    'state_transitions': [
+        {'trigger': 'begin_obs',         'source': 'unobserved', 'dest': 'observing'},
+        {'trigger': 'first_det_success', 'source': 'observing',  'dest': 'orbit_det'},
+        {'trigger': 'give_up_obs',       'source': 'observing',  'dest': 'retired'},
+        {'trigger': 'find_orbit',        'source': 'orbit_det',  'dest': 'char_vis',
+             'conditions': ['has_orbit', 'has_sufficient_gap']},
+        {'trigger': 'give_up_orbit_det', 'source': 'orbit_det',  'dest': 'retired'},
+        {'trigger': 'advance_char_vis',  'source': 'char_vis',   'dest': 'char_nuv',  'conditions': 'vis_char_succeeded'},
+        {'trigger': 'retire_vis',        'source': 'char_vis',   'dest': 'retired',   'conditions': 'vis_char_exhausted'},
+        {'trigger': 'advance_char_nuv',  'source': 'char_nuv',   'dest': 'char_nir',  'conditions': 'nuv_char_succeeded'},
+        {'trigger': 'retire_nuv',        'source': 'char_nuv',   'dest': 'retired',   'conditions': 'nuv_char_exhausted'},
+        {'trigger': 'succeed',           'source': 'char_nir',   'dest': 'success',   'conditions': 'all_char_succeeded'},
+        {'trigger': 'retire_nir',        'source': 'char_nir',   'dest': 'retired',   'conditions': 'nir_char_exhausted'},
+        {'trigger': 'end_mission', 'source': ['char_nuv', 'char_nir'], 'dest': 'partial'},
+        {'trigger': 'end_mission', 'source': ['orbit_det', 'char_vis'], 'dest': 'found'},
+        {'trigger': 'end_mission', 'source': 'observing', 'dest': 'unknown'},
+    ],
+    'observingModes': [
+        {
+         'instName': 'imaging_BroadbandVisible_500',
+         'systName': 'VVC500',
+         'tag': 'DET',
+         'int_factor_x': 1.0,
+         'comp_bound_x': 0.1,
+         'detection': True,
+         'lam': 500,
+         'SNR': 7,
+         },
+        {
+         'instName': 'spectro910_R70_EMCCD',
+         'systName': 'VVC575',
+         'tag': 'VIS',
+         'int_factor_x': 1.2,
+         'comp_bound_x': 0.8,
+         'detection': False,
+         'lam': 910,
+         'SNR': 5.0,
+         },
+        {
+         'instName': 'spectro_NUV310_EMCCD',
+         'systName': 'VVC575',
+         'tag': 'NUV',
+         'int_factor_x': 1.0,
+         'comp_bound_x': 0.9,
+         'detection': False,
+         'lam': 310,
+         'SNR': 5.0
+         },
+        {
+         'instName': 'spectro1500_R40_EMCCD',
+         'systName': 'VVC575',
+         'tag': 'NIR',
+         'int_factor_x': 2.0,
+         'comp_bound_x': 0.5,
+         'detection': False,
+         'lam': 1500,
+         'SNR': 8.5
+         },
+  ],
+}
 
-OBS_OVERHEAD = 0.2 # days, for everything
-CHAR_OVERHEAD = 0.8 # days, additional for chars
+
+def _states_from_transitions(transitions):
+    '''Derive the set of state names from a transitions list.'''
+    states = set()
+    for t in transitions:
+        for endpoint in (t['source'], t['dest']):
+            if isinstance(endpoint, list):
+                states.update(endpoint)
+            else:
+                states.add(endpoint)
+    return sorted(states)
+
 
 class SimulatedUniverse:
-    def __init__(self, eta, n_star=30, seed=None):
+    def __init__(self, *, specs):
+        n_star = specs['n_star']
+        seed = None if specs['seed'] == 0 else specs['seed']
         rng = np.random.default_rng(seed)
-        self.eta = eta
+        self.eta = specs['eta']
         self.n_star = n_star
-        self.earths = rng.poisson(eta, size=n_star)
+        self.earths = rng.poisson(self.eta, size=n_star)
         self.dist = rng.uniform(1.0, 10.0, size=n_star)
         det_raw = 5.0 / self.dist + rng.uniform(-0.1, 0.1, size=n_star)
         self.det_comp = np.clip(det_raw, 0.05, 0.95)
@@ -36,27 +115,30 @@ class SimulatedUniverse:
 
 
 class OpticalSystem:
-    def __init__(self, sim_universe):
+    def __init__(self, sim_universe, specs):
         self._dist = sim_universe.dist
+        self.obs_overhead  = specs['obs_overhead']
+        self.char_overhead = specs['char_overhead']
 
     def calc_intTime(self, star_num, mode=-1):
         t = 0.5 * self._dist[star_num] ** 2
         if mode >= 0:
             t *= CHAR_INT_FACTORS[mode]
-            t += CHAR_OVERHEAD
-        t += OBS_OVERHEAD
+            t += self.char_overhead
+        t += self.obs_overhead
         return float(t)
 
 
 class TimeKeeping:
-    def __init__(self):
+    def __init__(self, specs):
+        self.missionLife = specs['missionLife']
         self.total_time = 0.0
 
     def allocate(self, days):
         self.total_time += days
 
     def finished(self):
-        return self.total_time >= MISSION_DURATION
+        return self.total_time >= self.missionLife
 
     @property
     def current_time(self):
@@ -64,11 +146,12 @@ class TimeKeeping:
 
 
 class StarInfo:
-    def __init__(self, star_num, earths, det_comp, char_comp):
+    def __init__(self, star_num, earths, det_comp, char_comp, gap_required):
         self.star_num = star_num
         self.earths = earths
         self.det_comp = det_comp
         self.char_comp = char_comp              # 1-D array, length N_MODE
+        self.gap_required = gap_required
         self.n_det = 0
         self.n_det_ok = 0
         self.n_char    = np.zeros(N_MODE, dtype=int)
@@ -87,7 +170,7 @@ class StarInfo:
         '''Orbit determination span criterion met'''
         if self.t_det_first is None or self.t_det_last is None:
             return False
-        return (self.t_det_last - self.t_det_first) >= GAP_REQUIRED
+        return (self.t_det_last - self.t_det_first) >= self.gap_required
 
     def vis_char_succeeded(self):
         '''VIS characterization succeeded at least once'''
@@ -174,11 +257,16 @@ class StarInfo:
 
 
 class SurveySimulation:
-    def __init__(self, sim_universe, optical_system, time_keeping):
+    def __init__(self, sim_universe, optical_system, time_keeping, specs):
         self.su = sim_universe
         self.os = optical_system
         self.tk = time_keeping
-        self._rng = np.random.default_rng()
+        self.revisit_wait = specs['revisit_wait']
+        self.gap_required = specs['gap_required']
+        self.tintmax      = specs['tintmax']
+        self._specs = specs
+        seed = None if specs['seed'] == 0 else specs['seed']
+        self._rng = np.random.default_rng(seed)
         self.state_history = []   # one n_star state-vector per observation
         self.DRM = []             # one record per observation
         self.stars = [
@@ -187,36 +275,21 @@ class SurveySimulation:
                 earths=int(sim_universe.earths[i]),
                 det_comp=float(sim_universe.det_comp[i]),
                 char_comp=sim_universe.char_comp[i],
+                gap_required=self.gap_required,
             )
             for i in range(sim_universe.n_star)
         ]
         self._build_machines()
 
     def _build_machines(self):
-        transitions_spec = [
-            {'trigger': 'begin_obs',         'source': 'unobserved', 'dest': 'observing'},
-            {'trigger': 'first_det_success', 'source': 'observing',  'dest': 'orbit_det'},
-            {'trigger': 'give_up_obs',       'source': 'observing',  'dest': 'retired'},
-            {'trigger': 'find_orbit',        'source': 'orbit_det',  'dest': 'char_vis',
-                 'conditions': ['has_orbit', 'has_sufficient_gap']},
-            {'trigger': 'give_up_orbit_det', 'source': 'orbit_det',  'dest': 'retired'},
-            {'trigger': 'advance_char_vis',  'source': 'char_vis',   'dest': 'char_nuv',  'conditions': 'vis_char_succeeded'},
-            {'trigger': 'retire_vis',        'source': 'char_vis',   'dest': 'retired',   'conditions': 'vis_char_exhausted'},
-            {'trigger': 'advance_char_nuv',  'source': 'char_nuv',   'dest': 'char_nir',  'conditions': 'nuv_char_succeeded'},
-            {'trigger': 'retire_nuv',        'source': 'char_nuv',   'dest': 'retired',   'conditions': 'nuv_char_exhausted'},
-            {'trigger': 'succeed',           'source': 'char_nir',   'dest': 'success',   'conditions': 'all_char_succeeded'},
-            {'trigger': 'retire_nir',        'source': 'char_nir',   'dest': 'retired',   'conditions': 'nir_char_exhausted'},
-            {'trigger': 'end_mission', 'source': ['char_nuv', 'char_nir'], 'dest': 'partial'},
-            {'trigger': 'end_mission', 'source': ['orbit_det', 'char_vis'], 'dest': 'found'},
-            {'trigger': 'end_mission', 'source': 'observing', 'dest': 'unknown'},
-        ]
+        transitions = self._specs['state_transitions']
+        initial = self._specs['state_initial']['*']
+        states = _states_from_transitions(transitions)
         self._machine = Machine(
             model=self.stars,
-            states=['unobserved', 'observing', 'orbit_det',
-                    'char_vis', 'char_nuv', 'char_nir', 'success', 'partial',
-                    'found', 'unknown', 'retired'],
-            transitions=transitions_spec,
-            initial='unobserved',
+            states=states,
+            transitions=transitions,
+            initial=initial,
             ignore_invalid_triggers=True,
             auto_transitions=False,
         )
@@ -226,7 +299,7 @@ class SurveySimulation:
             return False
         if star.t_det_attempt is None:
             return True
-        return self.tk.current_time - star.t_det_attempt >= REVISIT_WAIT
+        return self.tk.current_time - star.t_det_attempt >= self.revisit_wait
 
     def next_target(self):
         char_cands = []
@@ -235,7 +308,7 @@ class SurveySimulation:
             elif s.is_char_nuv(): char_cands.append((s, MODE_NUV))
             elif s.is_char_nir(): char_cands.append((s, MODE_NIR))
         char_cands = [(s, m) for s, m in char_cands
-                      if self.os.calc_intTime(s.star_num, m) <= MAX_INT_TIME]
+                      if self.os.calc_intTime(s.star_num, m) <= self.tintmax]
         if char_cands:
             best, mode = max(char_cands,
                              key=lambda sm: sm[0].char_comp[sm[1]] / self.os.calc_intTime(sm[0].star_num, sm[1]))
@@ -304,10 +377,10 @@ class SurveySimulation:
         t0 = self.tk.current_time
         blocked = [s for s in active
                    if s.t_det_attempt is not None
-                   and t0 - s.t_det_attempt < REVISIT_WAIT]
+                   and t0 - s.t_det_attempt < self.revisit_wait]
         if not blocked:
             return None
-        next_open = min(s.t_det_attempt + REVISIT_WAIT for s in blocked)
+        next_open = min(s.t_det_attempt + self.revisit_wait for s in blocked)
         dt = next_open - t0
         self.tk.allocate(dt)
         drm = {'star_num': None, 'mode': None,
@@ -350,7 +423,7 @@ class SurveySimulation:
 
     def _print_summary(self):
         print(f"\n=== Final Summary "
-              f"(mission time: {self.tk.current_time:.1f} / {MISSION_DURATION:.1f} days) ===")
+              f"(mission time: {self.tk.current_time:.1f} / {self.tk.missionLife:.1f} days) ===")
         print(f"{'Star':>4}  {'dist':>5}  {'earths':>6}  {'n_det':>5}  {'n_det_ok':>8}  "
               f"{'nch_v':>5}  {'nch_n':>5}  {'nch_r':>5}  "
               f"{'nok_v':>5}  {'nok_n':>5}  {'nok_r':>5}  state")
@@ -364,10 +437,10 @@ class SurveySimulation:
 
 
 def run_one():
-    su = SimulatedUniverse(eta=0.4)
-    opt = OpticalSystem(su)
-    tk = TimeKeeping()
-    survey = SurveySimulation(su, opt, tk)
+    su = SimulatedUniverse(specs=specs)
+    opt = OpticalSystem(su, specs)
+    tk = TimeKeeping(specs)
+    survey = SurveySimulation(su, opt, tk, specs)
     survey.run_sim()
     return survey
 
