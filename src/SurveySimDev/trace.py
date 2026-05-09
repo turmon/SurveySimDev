@@ -68,11 +68,11 @@ _TRANSITIONS_FULL = [
     {'src': 'char_nuv',   'dst': 'retired',    'trigger': 'retire_nuv',        'conditions': ['nuv_char_exhausted']},
     {'src': 'char_nir',   'dst': 'success',    'trigger': 'succeed',           'conditions': ['all_char_succeeded']},
     {'src': 'char_nir',   'dst': 'retired',    'trigger': 'retire_nir',        'conditions': ['nir_char_exhausted']},
-    {'src': 'char_nuv',   'dst': 'partial',    'trigger': 'end_mission',       'conditions': ['mission_ended']},
-    {'src': 'char_nir',   'dst': 'partial',    'trigger': 'end_mission',       'conditions': ['mission_ended']},
-    {'src': 'orbit_det',  'dst': 'found',      'trigger': 'end_mission',       'conditions': ['mission_ended']},
-    {'src': 'char_vis',   'dst': 'found',      'trigger': 'end_mission',       'conditions': ['mission_ended']},
-    {'src': 'observing',  'dst': 'unknown',    'trigger': 'end_mission',       'conditions': ['mission_ended']},
+    {'src': 'char_nuv',   'dst': 'partial',    'trigger': 'end_mission',       'conditions': []},
+    {'src': 'char_nir',   'dst': 'partial',    'trigger': 'end_mission',       'conditions': []},
+    {'src': 'orbit_det',  'dst': 'found',      'trigger': 'end_mission',       'conditions': []},
+    {'src': 'char_vis',   'dst': 'found',      'trigger': 'end_mission',       'conditions': []},
+    {'src': 'observing',  'dst': 'unknown',    'trigger': 'end_mission',       'conditions': []},
 ]
 _ALL_TRANSITIONS = [(t['src'], t['dst']) for t in _TRANSITIONS_FULL]
 

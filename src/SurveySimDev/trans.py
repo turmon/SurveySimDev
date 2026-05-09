@@ -76,7 +76,6 @@ class StarInfo:
         self.t_det_first = None
         self.t_det_last = None
         self.t_det_attempt = None   # time of last detection attempt (success or failure)
-        self.end_of_mission = False
 
     # --- condition methods called by transitions ---
 
@@ -125,10 +124,6 @@ class StarInfo:
     def orbit_det_exhausted(self):
         '''Detection attempts exhausted without reaching orbit (3 successes)'''
         return self.n_det >= MAX_DET and not self.has_orbit()
-
-    def mission_ended(self):
-        '''End-of-mission flag set; enables terminal transitions'''
-        return self.end_of_mission
 
     # --- state-entry callbacks auto-discovered by transitions ---
 
@@ -211,12 +206,9 @@ class SurveySimulation:
             {'trigger': 'retire_nuv',        'source': 'char_nuv',   'dest': 'retired',   'conditions': 'nuv_char_exhausted'},
             {'trigger': 'succeed',           'source': 'char_nir',   'dest': 'success',   'conditions': 'all_char_succeeded'},
             {'trigger': 'retire_nir',        'source': 'char_nir',   'dest': 'retired',   'conditions': 'nir_char_exhausted'},
-            {'trigger': 'end_mission', 'source': ['char_nuv', 'char_nir'], 'dest': 'partial',
-                'conditions': ['mission_ended']},
-            {'trigger': 'end_mission', 'source': ['orbit_det', 'char_vis'], 'dest': 'found',
-                'conditions': ['mission_ended']},
-            {'trigger': 'end_mission', 'source': 'observing', 'dest': 'unknown',
-                'conditions': ['mission_ended']},
+            {'trigger': 'end_mission', 'source': ['char_nuv', 'char_nir'], 'dest': 'partial'},
+            {'trigger': 'end_mission', 'source': ['orbit_det', 'char_vis'], 'dest': 'found'},
+            {'trigger': 'end_mission', 'source': 'observing', 'dest': 'unknown'},
         ]
         self._machine = Machine(
             model=self.stars,
@@ -351,9 +343,7 @@ class SurveySimulation:
             # -- why here? record action chosen
             self.DRM.append(drm)
 
-        # End-of-mission sweep -- set flag then broadcast single trigger
-        for star in self.stars:
-            star.end_of_mission = True
+        # End-of-mission sweep -- broadcast single trigger to all stars
         self._machine.dispatch('end_mission')
         self.state_history.append([s.state for s in self.stars])
         self._print_summary()
