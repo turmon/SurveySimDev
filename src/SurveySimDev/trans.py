@@ -1,3 +1,7 @@
+#!/usr/bin/env python
+'''State-transition based scheduler demonstration
+'''
+
 import numpy as np
 from transitions import Machine
 

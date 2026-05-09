@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+'''Make "trace" plots of Survey Simulations
+'''
+
+from pathlib import Path
 import colorsys
 import inspect
 
@@ -8,6 +13,8 @@ from matplotlib.colors import ListedColormap
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from trans import StarInfo, run_one
+
+ROOTDIR = Path('Media')
 
 STATES = ['unobserved', 'observing', 'orbit_det',
           'char_vis', 'char_nuv', 'char_nir', 'success', 'partial',
@@ -98,7 +105,7 @@ _ABBREV = {
 }
 
 
-def make_trace_plot(survey, save_path='trace.png'):
+def make_trace_plot(survey, save_path=ROOTDIR/'trace.png'):
     n_star = survey.su.n_star
     DRM = survey.DRM
     n_obs = len(DRM)
@@ -270,7 +277,7 @@ def _draw_fsm(ax, visited, taken, fontsize=7, shrink=8, mini=False):
     ax.axis('off')
 
 
-def make_transition_plot(survey, save_path='transitions.png'):
+def make_transition_plot(survey, save_path=ROOTDIR/'transitions.png'):
     n_star = survey.su.n_star
     n_cols = 6
     n_rows = (n_star + n_cols - 1) // n_cols
@@ -319,7 +326,7 @@ def _edge_label(t):
     return s
 
 
-def make_machine_doc_plot(survey, save_path='machine.png'):
+def make_machine_doc_plot(survey, save_path=ROOTDIR/'machine.png'):
     fig_w, fig_h = 13.0, 7.5
     fig = plt.figure(figsize=(fig_w, fig_h))
     gs = GridSpec(
@@ -368,7 +375,10 @@ def make_machine_doc_plot(survey, save_path='machine.png'):
     lines = ['Guard conditions\n' + '─' * 48]
     for name in cond_names:
         method = getattr(StarInfo, name, None)
-        doc = next(iter((inspect.getdoc(method) or '').splitlines()), '') if method else ''
+        try:
+            doc = next(iter((inspect.getdoc(method) or '').splitlines()), '') if method else ''
+        except:
+            doc = f'No docstring found for {name}'
         lines.append(f'{name.ljust(col_w)}{doc}')
 
     ax_doc.text(0.02, 0.95, '\n'.join(lines),
@@ -381,7 +391,7 @@ def make_machine_doc_plot(survey, save_path='machine.png'):
     print(f"Saved to {save_path}")
 
 
-def make_strip_plot(survey, save_path='strip.png'):
+def make_strip_plot(survey, save_path=ROOTDIR/'strip.png'):
     DRM = survey.DRM
     if not DRM:
         print("No observations recorded.")

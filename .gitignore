@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Media churn area
+src/SurveySimDev/Media/*.png
+
+
