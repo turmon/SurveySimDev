@@ -5,8 +5,6 @@
 import numpy as np
 from transitions import Machine
 
-MAX_DET = 4     # failed detection attempts before retiring an unobserved star
-MAX_CHAR = 2    # characterization attempts per mode before retiring
 
 MODE_VIS, MODE_NUV, MODE_NIR = 0, 1, 2
 # observingModes extras:
@@ -18,7 +16,9 @@ specs = {
     'missionLife':  5 * 365.25,      # days -- total mission duration
     'n_star':       30,              # number of stars in the simulated catalog
     'seed':         0,              # RNG seed; 0 means unseeded (random)
-    'tintmax':      60.0,            # days -- skip char observations longer than this
+    'n_det_remove': 4,               # failed det attempts before retiring a star
+    'n_char_remove': 2,              # char attempts per mode before retiring
+    'intCutoff':      60.0,            # days -- skip char observations longer than this
     'revisit_wait': 0.3 * 365.25,   # days -- min gap after any detection attempt
     'gap_required': 0.5 * 365.25,   # days -- min temporal baseline for orbit determination
     'obs_overhead':  0.2,            # days -- overhead added to every observation
@@ -156,12 +156,14 @@ class TimeKeeping:
 
 class StarInfo:
     n_mode = None
-    def __init__(self, star_num, earths, gap_required):
+    def __init__(self, star_num, earths, gap_required, n_det_remove, n_char_remove):
         if not self.n_mode:
             RuntimeError('StarInfo needs its n_mode set')
         self.star_num = star_num
         self.earths = earths
         self.gap_required = gap_required
+        self.n_det_remove = n_det_remove
+        self.n_char_remove = n_char_remove
         self.n_det = 0
         self.n_det_ok = 0
         self.n_char    = np.zeros(self.n_mode, dtype=int)
@@ -200,23 +202,23 @@ class StarInfo:
 
     def vis_char_exhausted(self):
         '''VIS attempts exhausted with no success'''
-        return self.n_char[MODE_VIS] >= MAX_CHAR and self.n_char_ok[MODE_VIS] == 0
+        return self.n_char[MODE_VIS] >= self.n_char_remove and self.n_char_ok[MODE_VIS] == 0
 
     def nuv_char_exhausted(self):
         '''NUV attempts exhausted with no success'''
-        return self.n_char[MODE_NUV] >= MAX_CHAR and self.n_char_ok[MODE_NUV] == 0
+        return self.n_char[MODE_NUV] >= self.n_char_remove and self.n_char_ok[MODE_NUV] == 0
 
     def nir_char_exhausted(self):
         '''NIR attempts exhausted with no success'''
-        return self.n_char[MODE_NIR] >= MAX_CHAR and self.n_char_ok[MODE_NIR] == 0
+        return self.n_char[MODE_NIR] >= self.n_char_remove and self.n_char_ok[MODE_NIR] == 0
 
     def detection_exhausted(self):
         '''No more det attempts allowed (0 successes)'''
-        return self.n_det >= MAX_DET and self.n_det_ok == 0
+        return self.n_det >= self.n_det_remove and self.n_det_ok == 0
 
     def orbit_det_exhausted(self):
         '''Detection attempts exhausted without reaching orbit (3 successes)'''
-        return self.n_det >= MAX_DET and not self.has_orbit()
+        return self.n_det >= self.n_det_remove and not self.has_orbit()
 
     # --- state-entry callbacks auto-discovered by transitions ---
 
@@ -270,9 +272,11 @@ class SurveySimulation:
         self.su = sim_universe
         self.os = optical_system
         self.tk = time_keeping
-        self.revisit_wait = specs['revisit_wait']
-        self.gap_required = specs['gap_required']
-        self.tintmax      = specs['tintmax']
+        self.revisit_wait  = specs['revisit_wait']
+        self.gap_required  = specs['gap_required']
+        self.intCutoff       = specs['intCutoff']
+        self.n_det_remove  = specs['n_det_remove']
+        self.n_char_remove = specs['n_char_remove']
         self._specs = specs
         seed = None if specs['seed'] == 0 else specs['seed']
         self._rng = np.random.default_rng(seed)
@@ -285,6 +289,8 @@ class SurveySimulation:
                 star_num=i,
                 earths=int(sim_universe.earths[i]),
                 gap_required=self.gap_required,
+                n_det_remove=self.n_det_remove,
+                n_char_remove=self.n_char_remove,
             )
             for i in range(sim_universe.n_star)
         ]
@@ -317,7 +323,7 @@ class SurveySimulation:
             elif s.is_char_nuv(): char_cands.append((s, MODE_NUV))
             elif s.is_char_nir(): char_cands.append((s, MODE_NIR))
         char_cands = [(s, m) for s, m in char_cands
-                      if self.os.calc_intTime(s.star_num, m) <= self.tintmax]
+                      if self.os.calc_intTime(s.star_num, m) <= self.intCutoff]
         if char_cands:
             best, mode = max(char_cands,
                              key=lambda sm: self.su.char_comp[sm[0].star_num, sm[1]] / self.os.calc_intTime(sm[0].star_num, sm[1]))
