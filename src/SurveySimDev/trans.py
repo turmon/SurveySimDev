@@ -8,14 +8,14 @@ from transitions import Machine
 MISSION_DURATION = 5 * 365.25   # days
 MAX_DET = 4     # failed detection attempts before retiring an unobserved star
 MAX_CHAR = 2    # characterization attempts per mode before retiring
-REVISIT_WAIT = 0.3 * 365.25    # days — min gap after any detection attempt before re-observing
-GAP_REQUIRED = 0.5 * 365.25    # days — min temporal baseline (t_det_last - t_det_first) for orbit
+REVISIT_WAIT = 0.3 * 365.25    # days -- min gap after any detection attempt before re-observing
+GAP_REQUIRED = 0.5 * 365.25    # days -- min temporal baseline (t_det_last - t_det_first) for orbit
 
 N_MODE = 3
 MODE_VIS, MODE_NUV, MODE_NIR = 0, 1, 2
 CHAR_INT_FACTORS = [1.2, 1.0, 2.0]   # intTime multiplier per char mode [vis, nuv, nir]
 COMP_FACTORS     = [0.8, 0.9, 0.5]   # lower bound of char completeness per mode
-MAX_INT_TIME     = 60.0               # days — char observations longer than this are skipped
+MAX_INT_TIME     = 60.0               # days -- char observations longer than this are skipped
 
 OBS_OVERHEAD = 0.2 # days, for everything
 CHAR_OVERHEAD = 0.8 # days, additional for chars
@@ -265,19 +265,19 @@ class SurveySimulation:
         star.t_det_attempt = self.tk.current_time
         det_ok = bool(np.any(self._rng.random(size=(star.earths,)) < star.det_comp))
         if star.is_unobserved():
-            star.begin_obs()                        # unobserved → observing
+            star.begin_obs()                        # unobserved -> observing
         if det_ok:
             star.n_det_ok += 1
             if star.t_det_first is None:
                 star.t_det_first = t0
             star.t_det_last = t0
             if star.is_observing():
-                star.first_det_success()            # observing → orbit_det
+                star.first_det_success()            # observing -> orbit_det
         if star.is_observing() and star.detection_exhausted():
-            star.give_up_obs()                      # observing → retired (0 successes)
+            star.give_up_obs()                      # observing -> retired (0 successes)
         if star.is_orbit_det() and star.orbit_det_exhausted():
-            star.give_up_orbit_det()                # orbit_det → retired (< 3 successes)
-        star.find_orbit()                           # orbit_det → char_vis if conditions met
+            star.give_up_orbit_det()                # orbit_det -> retired (< 3 successes)
+        star.find_orbit()                           # orbit_det -> char_vis if conditions met
         drm = {'star_num': star.star_num, 'mode': -1,
                          'success': det_ok, 't': t0,
                          'int_time': int_time}
@@ -351,7 +351,7 @@ class SurveySimulation:
             # -- why here? record action chosen
             self.DRM.append(drm)
 
-        # End-of-mission sweep — set flag then broadcast single trigger
+        # End-of-mission sweep -- set flag then broadcast single trigger
         for star in self.stars:
             star.end_of_mission = True
         self._machine.dispatch('end_mission')

@@ -28,9 +28,9 @@ STATE_COLORS = {
     'char_nuv':   '#9e9ac8',   # purple (NUV)
     'char_nir':   '#fc8d59',   # orange (NIR)
     'success':    '#006d2c',
-    'partial':    '#a1d99b',   # light green — some modes succeeded
-    'found':      '#fec44f',   # warm yellow — detected, not fully characterised
-    'unknown':    '#c6dbef',   # very light blue — observed but no successful detection
+    'partial':    '#a1d99b',   # light green -- some modes succeeded
+    'found':      '#fec44f',   # warm yellow -- detected, not fully characterised
+    'unknown':    '#c6dbef',   # very light blue -- observed but no successful detection
     'retired':    '#969696',
 }
 
@@ -113,7 +113,7 @@ def make_trace_plot(survey, save_path=ROOTDIR/'trace.png'):
         print("No observations recorded.")
         return
 
-    # Build integer state matrix (n_star × n_hist); n_hist = n_obs + 1
+    # Build integer state matrix (n_star x n_hist); n_hist = n_obs + 1
     n_hist = len(survey.state_history)
     state_idx = {s: i for i, s in enumerate(STATES)}
     num_matrix = np.array(
@@ -207,8 +207,8 @@ def make_trace_plot(survey, save_path=ROOTDIR/'trace.png'):
     for i in range(n_star):
         n = int(earths[i])
         if n > 0:
-            sat = min(0.4 + 0.3 * (n - 1), 1.0)   # 0.4 → 0.7 → 1.0
-            val = max(0.5, 0.9 - 0.2 * (n - 1))    # 0.9 → 0.7 → 0.5
+            sat = min(0.4 + 0.3 * (n - 1), 1.0)   # 0.4 -> 0.7 -> 1.0
+            val = max(0.5, 0.9 - 0.2 * (n - 1))    # 0.9 -> 0.7 -> 0.5
             color = colorsys.hsv_to_rgb(1 / 3, sat, val)
             ax_side.add_patch(
                 mpatches.Rectangle((0, i - 0.5), 1, 1,
@@ -226,7 +226,7 @@ def make_trace_plot(survey, save_path=ROOTDIR/'trace.png'):
     ax_side.set_ylim(n_star - 0.5, -0.5)   # inverted to match imshow
     ax_side.set_xticks([])
     ax_side.set_yticks([])
-    ax_side.set_xlabel('♁', fontsize=12)
+    ax_side.set_xlabel('Earth', fontsize=12)
 
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
@@ -297,7 +297,7 @@ def make_transition_plot(survey, save_path=ROOTDIR/'transitions.png'):
     ax_full = fig.add_subplot(gs[0])
     _draw_fsm(ax_full, set(STATES), set(_ALL_TRANSITIONS),
               fontsize=9, shrink=14, mini=False)
-    ax_full.set_title('State Machine — All Transitions', fontsize=12, pad=8)
+    ax_full.set_title('State Machine -- All Transitions', fontsize=12, pad=8)
 
     # Per-star grid
     gs_stars = GridSpecFromSubplotSpec(
@@ -339,7 +339,7 @@ def make_machine_doc_plot(survey, save_path=ROOTDIR/'machine.png'):
     # --- Top panel: annotated machine diagram ---
     ax = fig.add_subplot(gs[0])
     _draw_fsm(ax, set(STATES), set(_ALL_TRANSITIONS), fontsize=10, shrink=16, mini=False)
-    ax.set_title('State Machine — Triggers and Guard Conditions', fontsize=12, pad=8)
+    ax.set_title('State Machine -- Triggers and Guard Conditions', fontsize=12, pad=8)
 
     for t in _TRANSITIONS_FULL:
         x0, y0 = _STATE_POS[t['src']]
@@ -347,13 +347,13 @@ def make_machine_doc_plot(survey, save_path=ROOTDIR/'machine.png'):
         mx, my = (x0 + x1) / 2, (y0 + y1) / 2
         label = _edge_label(t)
         if y0 == y1:
-            # horizontal arrow — label above
+            # horizontal arrow -- label above
             ax.text(mx, my + 0.18, label,
                     ha='center', va='bottom', fontsize=7,
                     color='#333', linespacing=1.3,
                     bbox=dict(facecolor='white', edgecolor='none', pad=1))
         else:
-            # diagonal arrow — label to the right of midpoint
+            # diagonal arrow -- label to the right of midpoint
             ax.text(mx + 0.08, my, label,
                     ha='left', va='center', fontsize=7,
                     color='#333', linespacing=1.3,
@@ -372,7 +372,7 @@ def make_machine_doc_plot(survey, save_path=ROOTDIR/'machine.png'):
                 seen.add(c)
 
     col_w = max(len(n) for n in cond_names) + 2
-    lines = ['Guard conditions\n' + '─' * 48]
+    lines = ['Guard conditions\n' + '-' * 48]
     for name in cond_names:
         method = getattr(StarInfo, name, None)
         try:
@@ -444,7 +444,7 @@ def make_strip_plot(survey, save_path=ROOTDIR/'strip.png'):
             axes[yr].barh(y_cat, seg_end - seg_start, left=seg_start,
                           height=STRIP_H, color=color, alpha=0.7, edgecolor='none')
 
-            # Success/fail dot — only for non-delay entries, only in the year
+            # Success/fail dot -- only for non-delay entries, only in the year
             # containing the temporal midpoint of the full (un-clipped) bar
             if obs['mode'] is not None and yr_t0 <= t_mid < yr_t1:
                 dot_color = '#2ca02c' if obs['success'] else '#d62728'
