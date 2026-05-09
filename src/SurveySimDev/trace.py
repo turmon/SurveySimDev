@@ -341,21 +341,29 @@ def make_machine_doc_plot(survey, save_path=ROOTDIR/'machine.png'):
     _draw_fsm(ax, set(STATES), set(_ALL_TRANSITIONS), fontsize=10, shrink=16, mini=False)
     ax.set_title('State Machine -- Triggers and Guard Conditions', fontsize=12, pad=8)
 
+    horiz_idx = 0
+    diag_idx = 0
     for t in _TRANSITIONS_FULL:
         x0, y0 = _STATE_POS[t['src']]
         x1, y1 = _STATE_POS[t['dst']]
         mx, my = (x0 + x1) / 2, (y0 + y1) / 2
         label = _edge_label(t)
         if y0 == y1:
-            # horizontal arrow -- label above
-            ax.text(mx, my + 0.18, label,
-                    ha='center', va='bottom', fontsize=7,
+            # horizontal arrow -- alternate between two y offsets so adjacent labels
+            # land on different rows and are less likely to overprint each other
+            y_off = 0.14 + 0.10 * (horiz_idx % 2)
+            horiz_idx += 1
+            ax.text(mx, my + y_off, label,
+                    ha='center', va='bottom', fontsize=6,
                     color='#333', linespacing=1.3,
                     bbox=dict(facecolor='white', edgecolor='none', pad=1))
         else:
-            # diagonal arrow -- label to the right of midpoint
-            ax.text(mx + 0.08, my, label,
-                    ha='left', va='center', fontsize=7,
+            # diagonal arrow -- all midpoints share y=0.5, so stagger across three
+            # rows to reduce overplotting
+            y_off = 0.13 * (diag_idx % 3) - 0.13
+            diag_idx += 1
+            ax.text(mx + 0.08, my + y_off, label,
+                    ha='left', va='center', fontsize=6,
                     color='#333', linespacing=1.3,
                     bbox=dict(facecolor='white', edgecolor='none', pad=1))
 
