@@ -8,7 +8,8 @@ decomposition of states than the VIS-only setup.
 
 ![State Machine](machine.png)
 
+![Observation chart](trace.png)
 
-strip.png
-trace.png
-transitions.png
+![Time-slice chart](strip.png)
+
+![All State Transitions](transitions.png)
