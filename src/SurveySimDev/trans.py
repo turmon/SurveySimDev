@@ -8,10 +8,11 @@ from transitions import Machine
 MAX_DET = 4     # failed detection attempts before retiring an unobserved star
 MAX_CHAR = 2    # characterization attempts per mode before retiring
 
-N_MODE = 3
 MODE_VIS, MODE_NUV, MODE_NIR = 0, 1, 2
-CHAR_INT_FACTORS = [1.2, 1.0, 2.0]   # intTime multiplier per char mode [vis, nuv, nir]
-COMP_FACTORS     = [0.8, 0.9, 0.5]   # lower bound of char completeness per mode
+# observingModes extras:
+#  int_factor_x: intTime multiplier per char mode (just for a mockup)
+#  comp_bound_x: lower bound of completeness per mode (just for a mockup)
+
 specs = {
     'eta':          0.4,             # mean number of earths per star
     'missionLife':  5 * 365.25,      # days -- total mission duration
@@ -106,24 +107,32 @@ class SimulatedUniverse:
         self.n_star = n_star
         self.earths = rng.poisson(self.eta, size=n_star)
         self.dist = rng.uniform(1.0, 10.0, size=n_star)
+        # detection mode stuff
+        self.det_mode = [om for om in specs['observingModes'] if om['detection']][0]
         det_raw = 5.0 / self.dist + rng.uniform(-0.1, 0.1, size=n_star)
-        self.det_comp = np.clip(det_raw, 0.05, 0.95)
+        self.det_comp = np.clip(det_raw, self.det_mode['comp_bound_x'], 0.95)
+        # char mode stuff
         # independent completeness per star and per char mode
-        char_raw = np.column_stack([rng.uniform(COMP_FACTORS[m], 1.0, size=n_star)
-                                    for m in range(N_MODE)])
+        self.char_modes = [om for om in specs['observingModes'] if not om['detection']]
+        char_raw = np.column_stack([rng.uniform(om['comp_bound_x'], 1.0, size=n_star)
+                                    for om in self.char_modes])
         self.char_comp = np.clip(char_raw, 0.05, 1.0)
 
 
 class OpticalSystem:
-    def __init__(self, sim_universe, specs):
-        self._dist = sim_universe.dist
+    def __init__(self, SU, specs):
+        self._dist = SU.dist
         self.obs_overhead  = specs['obs_overhead']
         self.char_overhead = specs['char_overhead']
+        # promote to here
+        self.det_mode = SU.det_mode
+        self.char_modes = SU.char_modes 
+        self.n_mode = len(SU.char_modes)
 
     def calc_intTime(self, star_num, mode=-1):
         t = 0.5 * self._dist[star_num] ** 2
         if mode >= 0:
-            t *= CHAR_INT_FACTORS[mode]
+            t *= self.char_modes[mode]['int_factor_x']
             t += self.char_overhead
         t += self.obs_overhead
         return float(t)
@@ -146,16 +155,19 @@ class TimeKeeping:
 
 
 class StarInfo:
+    n_mode = None
     def __init__(self, star_num, earths, det_comp, char_comp, gap_required):
+        if not self.n_mode:
+            RuntimeError('StarInfo needs its n_mode set')
         self.star_num = star_num
         self.earths = earths
         self.det_comp = det_comp
-        self.char_comp = char_comp              # 1-D array, length N_MODE
+        self.char_comp = char_comp              # 1-D array, length n_mode
         self.gap_required = gap_required
         self.n_det = 0
         self.n_det_ok = 0
-        self.n_char    = np.zeros(N_MODE, dtype=int)
-        self.n_char_ok = np.zeros(N_MODE, dtype=int)
+        self.n_char    = np.zeros(self.n_mode, dtype=int)
+        self.n_char_ok = np.zeros(self.n_mode, dtype=int)
         self.t_det_first = None
         self.t_det_last = None
         self.t_det_attempt = None   # time of last detection attempt (success or failure)
@@ -231,12 +243,12 @@ class StarInfo:
               f"(nok_nuv={self.n_char_ok[MODE_NUV]})")
 
     def on_enter_success(self):
-        counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(N_MODE))
+        counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(self.n_mode))
         print(f"  Star {self.star_num:2d}: char_nir    -> SUCCESS        "
               f"(ok/att per mode: [{counts}])")
 
     def on_enter_partial(self):
-        counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(N_MODE))
+        counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(self.n_mode))
         print(f"  Star {self.star_num:2d}: -> PARTIAL  (char ok/att=[{counts}])")
 
     def on_enter_found(self):
@@ -249,7 +261,7 @@ class StarInfo:
 
     def on_enter_retired(self):
         if np.any(self.n_char > 0):
-            counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(N_MODE))
+            counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(self.n_mode))
             note = f"char ok/att=[{counts}]"
         else:
             note = f"never detected ({self.n_det} attempts)"
@@ -269,6 +281,8 @@ class SurveySimulation:
         self._rng = np.random.default_rng(seed)
         self.state_history = []   # one n_star state-vector per observation
         self.DRM = []             # one record per observation
+        # set up the class (globally)
+        StarInfo.n_mode = self.os.n_mode
         self.stars = [
             StarInfo(
                 star_num=i,
