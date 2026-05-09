@@ -156,13 +156,12 @@ class TimeKeeping:
 
 class StarInfo:
     n_mode = None
-    def __init__(self, star_num, earths, det_comp, char_comp, gap_required):
+    def __init__(self, star_num, earths, det_comp, gap_required):
         if not self.n_mode:
             RuntimeError('StarInfo needs its n_mode set')
         self.star_num = star_num
         self.earths = earths
         self.det_comp = det_comp
-        self.char_comp = char_comp              # 1-D array, length n_mode
         self.gap_required = gap_required
         self.n_det = 0
         self.n_det_ok = 0
@@ -288,7 +287,6 @@ class SurveySimulation:
                 star_num=i,
                 earths=int(sim_universe.earths[i]),
                 det_comp=float(sim_universe.det_comp[i]),
-                char_comp=sim_universe.char_comp[i],
                 gap_required=self.gap_required,
             )
             for i in range(sim_universe.n_star)
@@ -325,7 +323,7 @@ class SurveySimulation:
                       if self.os.calc_intTime(s.star_num, m) <= self.tintmax]
         if char_cands:
             best, mode = max(char_cands,
-                             key=lambda sm: sm[0].char_comp[sm[1]] / self.os.calc_intTime(sm[0].star_num, sm[1]))
+                             key=lambda sm: self.su.char_comp[sm[0].star_num, sm[1]] / self.os.calc_intTime(sm[0].star_num, sm[1]))
             return best, mode
 
         det_cands = [s for s in self.stars if self._det_eligible(s)]
@@ -367,7 +365,7 @@ class SurveySimulation:
         t0 = self.tk.current_time
         self.tk.allocate(int_time)
         star.n_char[mode] += 1
-        char_ok = bool(np.any(self._rng.random(size=(star.earths,)) < star.char_comp[mode]))
+        char_ok = bool(np.any(self._rng.random(size=(star.earths,)) < self.su.char_comp[star.star_num, mode]))
         if char_ok:
             star.n_char_ok[mode] += 1
         if mode == MODE_VIS:
