@@ -44,11 +44,11 @@ Reference EXOSIMS prototypes live under `ref/EXOSIMS/` (read-only reference; don
 
 | Class | Purpose |
 |---|---|
-| `SimulatedUniverse` | Synthetic star catalog. Per-star: `earths` (Poisson), `dist` (uniform 1-10 pc), `det_comp`, `char_comp[N_MODE]`. |
-| `OpticalSystem` | `calc_intTime(star_num, mode=-1)` -- integration time in days. mode=-1 is detection; 0/1/2 are VIS/NUV/NIR char. |
-| `TimeKeeping` | Accumulates mission elapsed time; `.finished()` when >= `MISSION_DURATION` (5 yr). |
-| `StarInfo` | **FSM model**, one per star. Holds all observation counters/timestamps, implements condition methods and `on_enter_*` callbacks auto-discovered by `transitions`. |
-| `SurveySimulation` | Orchestrator. Builds the `transitions.Machine` over all `StarInfo` instances. Contains `next_target()`, `observation_detection()`, `observation_characterization()`, `observation_advance()`, and `run_sim()`. |
+| `SimulatedUniverse` | Synthetic star catalog. Owns `det_comp[n_star]` and `char_comp[n_star, N_MODE]`. Init: `(*, specs)`. |
+| `OpticalSystem` | `calc_intTime(star_num, mode=-1)` -- integration time in days. Init: `(SU, specs)`. |
+| `TimeKeeping` | Accumulates mission elapsed time; `.finished()` when >= `specs['missionLife']`. Init: `(specs)`. |
+| `StarInfo` | **FSM model**, one per star. Holds observation counters/timestamps and per-star parameters (`gap_required`, `n_det_remove`, `n_char_remove`). Implements condition methods and `on_enter_*` callbacks. Does NOT hold `det_comp` or `char_comp` -- those live on `SimulatedUniverse`. |
+| `SurveySimulation` | Orchestrator. Builds the `transitions.Machine`; accesses `su.det_comp`/`su.char_comp` directly. Init: `(sim_universe, optical_system, time_keeping, specs)`. |
 
 `run_one()` is the top-level convenience function (no arguments); returns a fully run `SurveySimulation`.
 
@@ -75,7 +75,7 @@ Key triggers and their guard conditions (defined as methods on `StarInfo`):
 | `find_orbit` | orbit_det -> char_vis | `has_orbit` (>=3 successes), `has_sufficient_gap` (>=0.5 yr baseline) |
 | `give_up_orbit_det` | orbit_det -> retired | -- |
 | `advance_char_vis/nuv` | char_vis -> char_nuv, char_nuv -> char_nir | `vis/nuv_char_succeeded` |
-| `retire_vis/nuv/nir` | char_X -> retired | `X_char_exhausted` (>=MAX_CHAR attempts, 0 successes) |
+| `retire_vis/nuv/nir` | char_X -> retired | `X_char_exhausted` (>=`n_char_remove` attempts, 0 successes) |
 | `succeed` | char_nir -> success | `all_char_succeeded` |
 | `end_mission` | observing/orbit_det/char_vis -> unknown/found/found; char_nuv/nir -> partial | `mission_ended` |
 
@@ -100,7 +100,7 @@ The `Machine` is built once in `SurveySimulation._build_machines()` with `ignore
 
 ## Scheduler Logic (`next_target`)
 
-Priority: characterization candidates first (filtered by `MAX_INT_TIME`), then detection candidates (filtered by `REVISIT_WAIT`).  Within each tier, pick by `comp / intTime` (greedy efficiency). Returns `(None, None)` when no target is available, which triggers `observation_advance()` to fast-forward time to the next revisit window.
+Priority: characterization candidates first (filtered by `specs['intCutoff']`), then detection candidates (filtered by `specs['revisit_wait']`).  Within each tier, pick by `comp / intTime` (greedy efficiency). Returns `(None, None)` when no target is available, which triggers `observation_advance()` to fast-forward time to the next revisit window.
 
 ## Visualization (`trace.py`)
 
@@ -113,6 +113,32 @@ Four plot functions, all called from `main()`:
 | `make_machine_doc_plot` | `machine.png` | Annotated full FSM + guard-condition docstring table |
 | `make_strip_plot` | `strip.png` | Year-by-year timeline strips for Astro/Char/Det rows |
 
+
+## specs dict (`trans.py`)
+
+`specs` is a module-level dict that is the single source of truth for all
+simulation parameters. It is passed as the last argument to every constructor.
+All keys are lowercase, with the exception of `missionLife` and `intCutoff`.
+
+| Key | Default | Description |
+|---|---|---|
+| `eta` | 0.4 | Mean number of earths per star (Poisson rate) |
+| `missionLife` | 5*365.25 | Total mission duration (days) |
+| `n_star` | 30 | Number of stars in the simulated catalog |
+| `seed` | 0 | RNG seed; 0 means unseeded (truly random) |
+| `n_det_remove` | 4 | Failed det attempts before retiring a star (0 successes) |
+| `n_char_remove` | 2 | Char attempts per mode before retiring (0 successes) |
+| `intCutoff` | 60.0 | Skip char observations longer than this (days) |
+| `revisit_wait` | 0.3*365.25 | Min gap after any detection attempt (days) |
+| `gap_required` | 0.5*365.25 | Min temporal baseline for orbit determination (days) |
+| `obs_overhead` | 0.2 | Overhead added to every observation (days) |
+| `char_overhead` | 0.8 | Additional overhead for characterizations (days) |
+| `state_initial` | `{'*': 'unobserved'}` | Initial FSM state per star (`'*'` = all stars) |
+| `state_transitions` | (list) | Full `pytransitions` transition spec; states are derived from this |
+| `observingModes` | (list) | Per-mode dicts with keys: `instName`, `systName`, `tag`, `detection`, `lam`, `SNR`, `int_factor_x`, `comp_bound_x` |
+
+The `seed==0` convention applies in both `SimulatedUniverse` and `SurveySimulation`:
+the value `0` is mapped to `None` before passing to `numpy.random.default_rng`.
 
 ## Guidance
 
