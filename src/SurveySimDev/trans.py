@@ -156,12 +156,11 @@ class TimeKeeping:
 
 class StarInfo:
     n_mode = None
-    def __init__(self, star_num, earths, det_comp, gap_required):
+    def __init__(self, star_num, earths, gap_required):
         if not self.n_mode:
             RuntimeError('StarInfo needs its n_mode set')
         self.star_num = star_num
         self.earths = earths
-        self.det_comp = det_comp
         self.gap_required = gap_required
         self.n_det = 0
         self.n_det_ok = 0
@@ -222,8 +221,7 @@ class StarInfo:
     # --- state-entry callbacks auto-discovered by transitions ---
 
     def on_enter_observing(self):
-        print(f"  Star {self.star_num:2d}: unobserved  -> OBSERVING      "
-              f"(det_comp={self.det_comp:.2f})")
+        print(f"  Star {self.star_num:2d}: unobserved  -> OBSERVING")
 
     def on_enter_orbit_det(self):
         print(f"  Star {self.star_num:2d}: observing   -> ORBIT_DET      "
@@ -286,7 +284,6 @@ class SurveySimulation:
             StarInfo(
                 star_num=i,
                 earths=int(sim_universe.earths[i]),
-                det_comp=float(sim_universe.det_comp[i]),
                 gap_required=self.gap_required,
             )
             for i in range(sim_universe.n_star)
@@ -329,7 +326,7 @@ class SurveySimulation:
         det_cands = [s for s in self.stars if self._det_eligible(s)]
         if det_cands:
             best = max(det_cands,
-                       key=lambda s: s.det_comp / self.os.calc_intTime(s.star_num))
+                       key=lambda s: self.su.det_comp[s.star_num] / self.os.calc_intTime(s.star_num))
             return best, -1
         # no targets
         return None, None
@@ -340,7 +337,7 @@ class SurveySimulation:
         self.tk.allocate(int_time)
         star.n_det += 1
         star.t_det_attempt = self.tk.current_time
-        det_ok = bool(np.any(self._rng.random(size=(star.earths,)) < star.det_comp))
+        det_ok = bool(np.any(self._rng.random(size=(star.earths,)) < self.su.det_comp[star.star_num]))
         if star.is_unobserved():
             star.begin_obs()                        # unobserved -> observing
         if det_ok:
