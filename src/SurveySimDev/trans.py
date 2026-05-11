@@ -8,7 +8,7 @@ from transitions import Machine
 
 ############################################################
 #
-# --- Spectral retrieval parametric settings
+# --- Spectral retrieval parametric settings (for entry into "specs" below)
 
 # Purpose: basic multi-band retrieval
 # concept: all are deferred: get the spectrum for later analysis
@@ -41,11 +41,15 @@ retrieval_models_decision_tree = {
 
 ############################################################
 #
-# --- ObservingModes
+# --- "specs" (abbreviated)
 #
-# Extras (non-physical, added just to run the sim):
-#  int_factor_x: intTime multiplier per char mode (just for a mockup)
-#  comp_bound_x: lower bound of completeness per mode (just for a mockup)
+# Note on observingModes
+#   Extras (useful):
+#     uses: links the SurveySimulation state to this observingMode
+#     mode_num: it's explicit here, but real EXOSIMS inserts it dynamically
+#   Extras (non-physical, added just to run the sim):
+#     int_factor_x: intTime multiplier per char mode (just for a mockup)
+#     comp_bound_x: lower bound of completeness per mode (just for a mockup)
 
 specs = {
     'eta':          0.4,             # mean number of earths per star
@@ -212,7 +216,7 @@ class OpticalSystem:
         '''Return a (pseudo-)spectrum and corresponding SNR.
 
         Of course, this is a mock-up. But we use the spectral elements later
-        to estimate atmospheric properties. The SNR is unused.'''
+        to mock-estimate atmospheric properties. The SNR is unused.'''
         spectrum = self.rng.uniform(0.0, 1.0, size=4)
         snr = 10.0 * np.ones_like(spectrum)
         return spectrum, snr
@@ -318,21 +322,16 @@ class StarInfo:
     # --- callbacks that adjust star state
 
     def promote_star(self, **kwargs):
+        print(f"  Star {self.star_num:2d}: promoted")
         self.promoted = True
 
     def forget_star(self, **kwargs):
+        # print(f"  Star {self.star_num:2d}: forgotten")
         self.eligible = False
 
     # --- callbacks auto-discovered by transitions
     # --- (non-functional -- for logging only)
-    # --- (using hard-coded names, conflicting with the spirit of genericity)
-
-    def on_enter_observing(self, **kwargs):
-        print(f"  Star {self.star_num:2d}: unobserved  -> OBSERVING")
-
-    def on_enter_orbit_det(self, **kwargs):
-        print(f"  Star {self.star_num:2d}: observing   -> ORBIT_DET      "
-              f"(n_det_ok={self.n_det_ok}, t={self.t_det_first:.1f}d)")
+    # --- Logging is in place for these states: success, partial, retired
 
     def on_enter_success(self, **kwargs):
         counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(self.n_mode))
@@ -343,14 +342,6 @@ class StarInfo:
         counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(self.n_mode))
         print(f"  Star {self.star_num:2d}: -> PARTIAL  (char ok/att=[{counts}])")
 
-    def on_enter_found(self, **kwargs):
-        print(f"  Star {self.star_num:2d}: -> FOUND    "
-              f"(n_det_ok={self.n_det_ok}/{self.n_det})")
-
-    def on_enter_unknown(self, **kwargs):
-        print(f"  Star {self.star_num:2d}: -> UNKNOWN  "
-              f"({self.n_det} det attempts, 0 successes)")
-
     def on_enter_retired(self, **kwargs):
         if np.any(self.n_char > 0):
             counts = ', '.join(f"{self.n_char_ok[m]}/{self.n_char[m]}" for m in range(self.n_mode))
@@ -358,19 +349,6 @@ class StarInfo:
         else:
             note = f"never detected ({self.n_det} attempts)"
         print(f"  Star {self.star_num:2d}: -> RETIRED  ({note})")
-
-    # --- FIXME: on_enter_char* are __especially__ not generic - generalize or delete
-    def on_enter_char_vis(self, **kwargs):
-        print(f"  Star {self.star_num:2d}: orbit_det   -> CHAR_VIS       "
-              f"(earths={self.earths})")
-
-    def on_enter_char_nuv(self, **kwargs):
-        print(f"  Star {self.star_num:2d}: char_vis    -> CHAR_NUV       "
-              f"(nok_vis={self.n_char_ok[0]})")
-
-    def on_enter_char_nir(self, **kwargs):
-        print(f"  Star {self.star_num:2d}: char_nuv    -> CHAR_NIR       "
-              f"(nok_nuv={self.n_char_ok[1]})")
 
 
 class SurveySimulation:
@@ -496,7 +474,7 @@ class SurveySimulation:
         if char_ok:
             star.n_char_ok[mode] += 1
         star.retrievals[mode] = retrieval
-        # make observing-state transition if needed
+        # update star's observing-state if needed
         star.process_char(mode=mode, retrieval=retrieval)
         # return value
         drm = {'star_num': star.star_num, 'mode': mode,
@@ -535,14 +513,14 @@ class SurveySimulation:
             star, mode = self.next_target()
 
             # 3/ execute observation or time-advance
-            if mode is None:
-                drm = self.observation_advance()
-                if not drm:
-                    break # nothing more to do
-            elif mode == -1:
+            if mode == -1:
                 drm = self.observation_detection(star)
             elif mode >= 0:
                 drm = self.observation_characterization(star, mode)
+            elif mode is None:
+                drm = self.observation_advance()
+                if not drm:
+                    break # nothing more to do
             else:
                 raise RuntimeError('Bad mode')
 
@@ -560,7 +538,7 @@ class SurveySimulation:
         mode_labels = []
         for m in range(n_mode):
             uses = self.os.char_modes[m].get('uses', [])
-            lbl = uses[0].replace('char_', '') if uses else str(m)
+            lbl = uses[0].replace('char_', '') if uses else f'M#{m}'
             mode_labels.append(lbl)
         sep = '  '
         col_w = 5
