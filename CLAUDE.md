@@ -48,7 +48,8 @@ Reference EXOSIMS prototypes live under `ref/EXOSIMS/` (read-only reference; don
 | `OpticalSystem` | `calc_intTime(star_num, mode=-1)` -- integration time in days. Init: `(SU, specs)`. |
 | `TimeKeeping` | Accumulates mission elapsed time; `.finished()` when >= `specs['missionLife']`. Init: `(specs)`. |
 | `StarInfo` | **FSM model**, one per star. Holds observation counters/timestamps and per-star parameters (`gap_required`, `n_det_remove`, `n_char_remove`). Implements condition methods and `on_enter_*` callbacks. Does NOT hold `det_comp` or `char_comp` -- those live on `SimulatedUniverse`. |
-| `SurveySimulation` | Orchestrator. Builds the `transitions.Machine`; accesses `su.det_comp`/`su.char_comp` directly. Init: `(sim_universe, optical_system, time_keeping, specs)`. |
+| `SpectralRetrieval` | Spectral analysis engine. Reads `specs['retrieval_models']`, a dict keyed by observing-state name (e.g. `'char_vis'`), each value being a per-QOI detection-probability dict. `spectral_retrieval(mode, obs_state, star_num, spectrum, snr)` returns `{'char_ok': bool, 'analysis': {...}}`. Init: `(optical_system, specs)`. |
+| `SurveySimulation` | Orchestrator. Builds the `transitions.Machine`; accesses `su.det_comp`/`su.char_comp` directly. Init: `(time_keeping, sim_universe, optical_system, spectral_retrieval, specs)`. |
 
 `run_one()` is the top-level convenience function (no arguments); returns a fully run `SurveySimulation`.
 
@@ -104,6 +105,13 @@ Priority: characterization candidates first (filtered by `specs['intCutoff']`), 
 
 ## Visualization (`trace.py`)
 
+The `FSMInfo` class (defined in `trace.py`) auto-derives all state-diagram properties
+from `specs['state_transitions']` and `specs['state_initial']`: state list (BFS order),
+2-row layout positions, per-state colors, full and abbreviated labels, dot styles per
+observing mode, and arc radii for skip-edges (same-row transitions that span more than
+one position unit, drawn as arcs to avoid overplotting).  All four plot functions accept
+`(survey, fsm_info, ...)` and use these derived properties rather than any hardcoded constants.
+
 Four plot functions, all called from `main()`:
 
 | Function | Output file | Description |
@@ -136,6 +144,7 @@ All keys are lowercase, with the exception of `missionLife` and `intCutoff`.
 | `state_initial` | `{'*': 'unobserved'}` | Initial FSM state per star (`'*'` = all stars) |
 | `state_transitions` | (list) | Full `pytransitions` transition spec; states are derived from this |
 | `observingModes` | (list) | Per-mode dicts with keys: `instName`, `systName`, `tag`, `detection`, `lam`, `SNR`, `int_factor_x`, `comp_bound_x` |
+| `retrieval_models` | (dict) | Keyed by observing-state name (e.g. `'char_vis'`); each value is a per-QOI detection-probability dict consumed by `SpectralRetrieval`. Omit or set to `{}` to defer all analysis. |
 
 The `seed==0` convention applies in both `SimulatedUniverse` and `SurveySimulation`:
 the value `0` is mapped to `None` before passing to `numpy.random.default_rng`.
