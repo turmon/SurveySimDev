@@ -46,6 +46,7 @@ class FSMInfo:
         self.full_label = {s: self._auto_label(s) for s in self.states}
         self.abbrev = self._make_abbrev()
         self.dot_styles = self._auto_dot_styles(specs.get('observingModes', []))
+        self.edge_rad = self._auto_edge_rad()
         self.success_state = self._top_row_term  # may be None
 
     def _normalize_transitions(self, raw):
@@ -154,6 +155,14 @@ class FSMInfo:
             else:
                 abbrev[s] = ab
         return abbrev
+
+    def _auto_edge_rad(self):
+        rads = {}
+        for src, dst in self.all_transitions:
+            x0, y0 = self.state_pos[src]
+            x1, y1 = self.state_pos[dst]
+            rads[(src, dst)] = (0.25 if y0 == y1 and abs(x1 - x0) > 1.05 else 0.0)
+        return rads
 
     def _auto_dot_styles(self, observing_modes):
         _CHAR_COLORS = ['#2ca02c', '#9e9ac8', '#fc8d59', '#e7ba52', '#6baed6']
@@ -316,16 +325,16 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False):
         x0, y0 = fsm_info.state_pos[src]
         x1, y1 = fsm_info.state_pos[dst]
         is_taken = (src, dst) in taken
-        ax.annotate(
-            '', xy=(x1, y1), xytext=(x0, y0),
-            arrowprops=dict(
-                arrowstyle='->',
-                color='#111' if is_taken else '#ddd',
-                lw=lw if is_taken else 0.7,
-                shrinkA=shrink, shrinkB=shrink,
-            ),
-            zorder=1,
+        ap = dict(
+            arrowstyle='->',
+            color='#111' if is_taken else '#ddd',
+            lw=lw if is_taken else 0.7,
+            shrinkA=shrink, shrinkB=shrink,
         )
+        rad = fsm_info.edge_rad[(src, dst)]
+        if rad:
+            ap['connectionstyle'] = f'arc3,rad={rad}'
+        ax.annotate('', xy=(x1, y1), xytext=(x0, y0), arrowprops=ap, zorder=1)
     for state, (x, y) in fsm_info.state_pos.items():
         label = fsm_info.abbrev[state] if mini else fsm_info.full_label[state]
         is_visited = state in visited
@@ -420,10 +429,12 @@ def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png'):
         mx, my = (x0 + x1) / 2, (y0 + y1) / 2
         label = _edge_label(t)
         if y0 == y1:
-            # horizontal arrow -- alternate between two y offsets to reduce overprint
+            # horizontal arrow; lift label to arc apex for curved (skip) edges
+            rad = fsm_info.edge_rad[(t['src'], t['dst'])]
+            arc_lift = 0.5 * rad * abs(x1 - x0)
             y_off = 0.14 + 0.10 * (horiz_idx % 2)
             horiz_idx += 1
-            ax.text(mx, my + y_off, label,
+            ax.text(mx, my + arc_lift + y_off, label,
                     ha='center', va='bottom', fontsize=6,
                     color='#333', linespacing=1.3,
                     bbox=dict(facecolor='white', edgecolor='none', pad=1))
