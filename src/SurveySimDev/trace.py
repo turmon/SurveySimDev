@@ -2,6 +2,7 @@
 '''Make "trace" plots of Survey Simulations
 '''
 
+from collections import deque
 from pathlib import Path
 import colorsys
 import inspect
@@ -16,96 +17,161 @@ from trans import StarInfo, run_one
 
 ROOTDIR = Path('Media')
 
-STATES = ['unobserved', 'observing', 'orbit_det',
-          'char_vis', 'char_nuv', 'char_nir', 'success', 'partial',
-          'found', 'unknown', 'retired']
 
-STATE_COLORS = {
-    'unobserved': '#f5f5f5',
-    'observing':  '#9ecae1',   # light blue
-    'orbit_det':  '#3182bd',   # medium blue
-    'char_vis':   '#74c476',   # green  (VIS)
-    'char_nuv':   '#9e9ac8',   # purple (NUV)
-    'char_nir':   '#fc8d59',   # orange (NIR)
-    'success':    '#006d2c',
-    'partial':    '#a1d99b',   # light green -- some modes succeeded
-    'found':      '#fec44f',   # warm yellow -- detected, not fully characterised
-    'unknown':    '#c6dbef',   # very light blue -- observed but no successful detection
-    'retired':    '#969696',
-}
+class FSMInfo:
+    '''Pre-processed FSM metadata derived from a specs dict.
 
-DOT_STYLES = {
-    (-1, True):  ('#1f77b4', 'Det: Success'),
-    (-1, False): ('black',   'Det: Fail'),
-    ( 0, True):  ('#2ca02c', 'Char: Success'),
-    ( 0, False): ('#d62728', 'Char: Fail'),
-}
+    Derives states, transitions, layout positions, colors, labels, and
+    abbreviations from specs['state_transitions'] and specs['state_initial'].
+    All attributes are plain dicts/lists that can be overridden after init.
+    '''
 
-# State machine diagram layout
-_STATE_POS = {
-    'unobserved': (0.0, 1.0),
-    'observing':  (1.0, 1.0),
-    'orbit_det':  (2.0, 1.0),
-    'char_vis':   (3.0, 1.0),
-    'char_nuv':   (4.0, 1.0),
-    'char_nir':   (5.0, 1.0),
-    'success':    (6.0, 1.0),
-    'unknown':    (1.0, 0.0),
-    'found':      (2.5, 0.0),
-    'retired':    (4.0, 0.0),
-    'partial':    (5.5, 0.0),
-}
+    # Colors for main-chain states (indices 1..N in BFS order, before top-row terminal)
+    _MAIN_COLORS = [
+        '#9ecae1', '#3182bd', '#74c476', '#9e9ac8', '#fc8d59',
+        '#e7969c', '#fdae6b', '#c7e9c0',
+    ]
+    # Colors for bottom-row terminal states, assigned by decreasing x position:
+    # highest x = most-advanced outcome (light green), then yellow, gray, light blue
+    _TERM_COLORS = ['#a1d99b', '#fec44f', '#969696', '#c6dbef', '#bcbddc']
 
-_TRANSITIONS_FULL = [
-    {'src': 'unobserved', 'dst': 'observing',  'trigger': 'begin_obs',         'conditions': []},
-    {'src': 'observing',  'dst': 'orbit_det',  'trigger': 'first_det_success', 'conditions': []},
-    {'src': 'observing',  'dst': 'retired',    'trigger': 'give_up_obs',       'conditions': []},
-    {'src': 'orbit_det',  'dst': 'char_vis',   'trigger': 'find_orbit',        'conditions': ['has_orbit', 'has_sufficient_gap']},
-    {'src': 'orbit_det',  'dst': 'retired',    'trigger': 'give_up_orbit_det', 'conditions': []},
-    {'src': 'char_vis',   'dst': 'char_nuv',   'trigger': 'advance_char_vis',  'conditions': ['vis_char_succeeded']},
-    {'src': 'char_vis',   'dst': 'retired',    'trigger': 'retire_vis',        'conditions': ['vis_char_exhausted']},
-    {'src': 'char_nuv',   'dst': 'char_nir',   'trigger': 'advance_char_nuv',  'conditions': ['nuv_char_succeeded']},
-    {'src': 'char_nuv',   'dst': 'retired',    'trigger': 'retire_nuv',        'conditions': ['nuv_char_exhausted']},
-    {'src': 'char_nir',   'dst': 'success',    'trigger': 'succeed',           'conditions': ['all_char_succeeded']},
-    {'src': 'char_nir',   'dst': 'retired',    'trigger': 'retire_nir',        'conditions': ['nir_char_exhausted']},
-    {'src': 'char_nuv',   'dst': 'partial',    'trigger': 'end_mission',       'conditions': []},
-    {'src': 'char_nir',   'dst': 'partial',    'trigger': 'end_mission',       'conditions': []},
-    {'src': 'orbit_det',  'dst': 'found',      'trigger': 'end_mission',       'conditions': []},
-    {'src': 'char_vis',   'dst': 'found',      'trigger': 'end_mission',       'conditions': []},
-    {'src': 'observing',  'dst': 'unknown',    'trigger': 'end_mission',       'conditions': []},
-]
-_ALL_TRANSITIONS = [(t['src'], t['dst']) for t in _TRANSITIONS_FULL]
+    def __init__(self, specs):
+        self.initial = (specs['state_initial'].get('*')
+                        or next(iter(specs['state_initial'].values())))
+        self.transitions_full = self._normalize_transitions(specs['state_transitions'])
+        self.all_transitions = [(t['src'], t['dst']) for t in self.transitions_full]
+        self.states = self._ordered_states()
+        self.state_pos = self._auto_pos()
+        self.state_colors = self._auto_colors()
+        self.full_label = {s: self._auto_label(s) for s in self.states}
+        self.abbrev = self._make_abbrev()
+        self.dot_styles = self._auto_dot_styles(specs.get('observingModes', []))
+        self.success_state = self._top_row_term  # may be None
 
-_FULL_LABEL = {
-    'unobserved': 'unobserved',
-    'observing':  'observing',
-    'orbit_det':  'orbit\ndet',
-    'char_vis':   'char\nVIS',
-    'char_nuv':   'char\nNUV',
-    'char_nir':   'char\nNIR',
-    'success':    'success',
-    'partial':    'partial',
-    'found':      'found',
-    'unknown':    'unknown',
-    'retired':    'retired',
-}
+    def _normalize_transitions(self, raw):
+        result = []
+        for t in raw:
+            sources = t['source'] if isinstance(t['source'], list) else [t['source']]
+            conds = t.get('conditions', [])
+            if isinstance(conds, str):
+                conds = [conds]
+            unlesses = t.get('unless', [])
+            if isinstance(unlesses, str):
+                unlesses = [unlesses]
+            for src in sources:
+                result.append({
+                    'src': src,
+                    'dst': t['dest'],
+                    'trigger': t['trigger'],
+                    'conditions': list(conds),
+                    'unless': list(unlesses),
+                })
+        return result
 
-_ABBREV = {
-    'unobserved': 'un',
-    'observing':  'ob',
-    'orbit_det':  'od',
-    'char_vis':   'cv',
-    'char_nuv':   'cu',
-    'char_nir':   'ci',
-    'success':    'su',
-    'partial':    'pa',
-    'found':      'fo',
-    'unknown':    'uk',
-    'retired':    're',
-}
+    def _ordered_states(self):
+        all_states, srcs = set(), set()
+        for t in self.transitions_full:
+            all_states.update([t['src'], t['dst']])
+            srcs.add(t['src'])
+        terminal = all_states - srcs
+        non_terminal = srcs
+
+        # BFS from initial through non-terminal states
+        ordered, seen = [], set()
+        if self.initial in non_terminal:
+            queue = deque([self.initial])
+            seen.add(self.initial)
+            while queue:
+                s = queue.popleft()
+                ordered.append(s)
+                for t in self.transitions_full:
+                    if t['src'] == s and t['dst'] in non_terminal and t['dst'] not in seen:
+                        seen.add(t['dst'])
+                        queue.append(t['dst'])
+        for s in sorted(non_terminal - seen):
+            ordered.append(s)
+
+        # Top-row terminal: exactly one non-terminal predecessor = last BFS state
+        last_nt = ordered[-1] if ordered else None
+        self._top_row_term = None
+        if last_nt:
+            for s in sorted(terminal):
+                nt_preds = {t['src'] for t in self.transitions_full
+                            if t['dst'] == s and t['src'] in non_terminal}
+                if nt_preds == {last_nt}:
+                    self._top_row_term = s
+                    break
+        if self._top_row_term:
+            ordered.append(self._top_row_term)
+
+        self._n_top_row = len(ordered)
+        ordered.extend(sorted(terminal - ({self._top_row_term} if self._top_row_term else set())))
+        return ordered
+
+    def _auto_pos(self):
+        pos = {}
+        for i, s in enumerate(self.states[:self._n_top_row]):
+            pos[s] = (float(i), 1.0)
+        for s in self.states[self._n_top_row:]:
+            pred_xs = [pos[p][0]
+                       for p in {t['src'] for t in self.transitions_full
+                                 if t['dst'] == s and t['src'] in pos}]
+            pos[s] = (sum(pred_xs) / len(pred_xs) if pred_xs else 0.0, 0.0)
+        return pos
+
+    def _auto_colors(self):
+        colors = {}
+        top_row = self.states[:self._n_top_row]
+        colors[top_row[0]] = '#f5f5f5'
+        for i, s in enumerate(top_row[1:], 1):
+            colors[s] = ('#006d2c' if s == self._top_row_term
+                         else self._MAIN_COLORS[(i - 1) % len(self._MAIN_COLORS)])
+        bottom = self.states[self._n_top_row:]
+        for i, s in enumerate(sorted(bottom, key=lambda s: -self.state_pos[s][0])):
+            colors[s] = self._TERM_COLORS[i % len(self._TERM_COLORS)]
+        return colors
+
+    @staticmethod
+    def _auto_label(s):
+        parts = s.split('_')
+        if len(parts) == 1:
+            return s
+        return '\n'.join(p.upper() if len(p) <= 3 else p for p in parts)
+
+    def _make_abbrev(self):
+        raw = {s: ((s.split('_')[0][0] + s.split('_')[1][0]) if '_' in s else s[:2])
+               for s in self.states}
+        count = {}
+        for ab in raw.values():
+            count[ab] = count.get(ab, 0) + 1
+        seen, abbrev = {}, {}
+        for s in self.states:
+            ab = raw[s]
+            if count[ab] > 1:
+                n = seen.get(ab, 0)
+                seen[ab] = n + 1
+                abbrev[s] = ab[0] + str(n)
+            else:
+                abbrev[s] = ab
+        return abbrev
+
+    def _auto_dot_styles(self, observing_modes):
+        _CHAR_COLORS = ['#2ca02c', '#9e9ac8', '#fc8d59', '#e7ba52', '#6baed6']
+        styles = {
+            (-1, True):  ('#1f77b4', 'Det: Success'),
+            (-1, False): ('black',   'Det: Fail'),
+        }
+        char_modes = [m for m in observing_modes if not m.get('detection', True)]
+        for i, mode in enumerate(char_modes):
+            m = mode['mode_num']
+            color = _CHAR_COLORS[i % len(_CHAR_COLORS)]
+            lam = mode.get('lam', '?')
+            styles[(m, True)]  = (color, f'Char {lam}nm: Success')
+            styles[(m, False)] = ('#d62728', f'Char {lam}nm: Fail')
+        return styles
 
 
-def make_trace_plot(survey, save_path=ROOTDIR/'trace.png'):
+def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png'):
     n_star = survey.su.n_star
     DRM = survey.DRM
     n_obs = len(DRM)
@@ -115,14 +181,14 @@ def make_trace_plot(survey, save_path=ROOTDIR/'trace.png'):
 
     # Build integer state matrix (n_star x n_hist); n_hist = n_obs + 1
     n_hist = len(survey.state_history)
-    state_idx = {s: i for i, s in enumerate(STATES)}
+    state_idx = {s: i for i, s in enumerate(fsm_info.states)}
     num_matrix = np.array(
         [[state_idx[survey.state_history[k][i]] for k in range(n_hist)]
          for i in range(n_star)],
         dtype=float,
     )
 
-    cmap = ListedColormap([STATE_COLORS[s] for s in STATES])
+    cmap = ListedColormap([fsm_info.state_colors[s] for s in fsm_info.states])
 
     # Figure size scales with data
     fig_w = max(14, n_obs * 0.08)
@@ -139,7 +205,7 @@ def make_trace_plot(survey, save_path=ROOTDIR/'trace.png'):
         aspect='auto',
         cmap=cmap,
         vmin=-0.5,
-        vmax=len(STATES) - 0.5,
+        vmax=len(fsm_info.states) - 0.5,
         origin='upper',
         interpolation='nearest',
     )
@@ -150,8 +216,9 @@ def make_trace_plot(survey, save_path=ROOTDIR/'trace.png'):
             ax_main.axvline(k, color='#888888', linewidth=0.6,
                             linestyle=':', alpha=0.7, zorder=2)
         else:
-            color, _ = DOT_STYLES.get((obs['mode'], obs['success']),
-                                       DOT_STYLES[(0, obs['success'])])
+            color, _ = fsm_info.dot_styles.get(
+                (obs['mode'], obs['success']),
+                fsm_info.dot_styles.get((0, obs['success']), ('#999999', '')))
             ax_main.plot(
                 k, obs['star_num'], 'o',
                 color=color, markersize=4,
@@ -187,15 +254,15 @@ def make_trace_plot(survey, save_path=ROOTDIR/'trace.png'):
 
     # Legend
     state_patches = [
-        mpatches.Patch(facecolor=STATE_COLORS[s], edgecolor='#888',
+        mpatches.Patch(facecolor=fsm_info.state_colors[s], edgecolor='#888',
                        linewidth=0.5, label=s.replace('_', ' '))
-        for s in STATES
+        for s in fsm_info.states
     ]
     dot_handles = [
         plt.Line2D([0], [0], marker='o', linestyle='none',
                    markerfacecolor=c, markeredgecolor='white',
                    markeredgewidth=0.3, markersize=5, label=lbl)
-        for (_, __), (c, lbl) in DOT_STYLES.items()
+        for (_, __), (c, lbl) in fsm_info.dot_styles.items()
     ]
     ax_main.legend(
         handles=state_patches + dot_handles,
@@ -218,7 +285,7 @@ def make_trace_plot(survey, save_path=ROOTDIR/'trace.png'):
             if final == 'partial':
                 ax_side.plot(0.5, i, 'P', color='black',
                              markersize=5, zorder=4)
-            elif final != 'success':
+            elif final != fsm_info.success_state:
                 ax_side.plot(0.5, i, 'x', color='red',
                              markersize=7, markeredgewidth=1.5, zorder=4)
 
@@ -242,12 +309,12 @@ def _star_visits(survey, star_idx):
     return visited, taken
 
 
-def _draw_fsm(ax, visited, taken, fontsize=7, shrink=8, mini=False):
+def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False):
     """Draw a state machine diagram; visited/taken control fill and arrow weight."""
     lw = 1.5 if mini else 2.0
-    for src, dst in _ALL_TRANSITIONS:
-        x0, y0 = _STATE_POS[src]
-        x1, y1 = _STATE_POS[dst]
+    for src, dst in fsm_info.all_transitions:
+        x0, y0 = fsm_info.state_pos[src]
+        x1, y1 = fsm_info.state_pos[dst]
         is_taken = (src, dst) in taken
         ax.annotate(
             '', xy=(x1, y1), xytext=(x0, y0),
@@ -259,25 +326,27 @@ def _draw_fsm(ax, visited, taken, fontsize=7, shrink=8, mini=False):
             ),
             zorder=1,
         )
-    for state, (x, y) in _STATE_POS.items():
-        label = _ABBREV[state] if mini else _FULL_LABEL[state]
+    for state, (x, y) in fsm_info.state_pos.items():
+        label = fsm_info.abbrev[state] if mini else fsm_info.full_label[state]
         is_visited = state in visited
         ax.text(
             x, y, label,
             ha='center', va='center', fontsize=fontsize, zorder=3,
             bbox=dict(
                 boxstyle='round,pad=0.3',
-                facecolor=STATE_COLORS[state] if is_visited else 'white',
+                facecolor=fsm_info.state_colors[state] if is_visited else 'white',
                 edgecolor='#333' if is_visited else '#bbb',
                 linewidth=1.2 if is_visited else 0.5,
             ),
         )
-    ax.set_xlim(-0.6, 7.0)
-    ax.set_ylim(-0.6, 1.6)
+    xs = [p[0] for p in fsm_info.state_pos.values()]
+    ys = [p[1] for p in fsm_info.state_pos.values()]
+    ax.set_xlim(min(xs) - 0.6, max(xs) + 0.5)
+    ax.set_ylim(min(ys) - 0.6, max(ys) + 1.2)
     ax.axis('off')
 
 
-def make_transition_plot(survey, save_path=ROOTDIR/'transitions.png'):
+def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png'):
     n_star = survey.su.n_star
     n_cols = 6
     n_rows = (n_star + n_cols - 1) // n_cols
@@ -295,7 +364,7 @@ def make_transition_plot(survey, save_path=ROOTDIR/'transitions.png'):
 
     # Full machine
     ax_full = fig.add_subplot(gs[0])
-    _draw_fsm(ax_full, set(STATES), set(_ALL_TRANSITIONS),
+    _draw_fsm(ax_full, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
               fontsize=9, shrink=14, mini=False)
     ax_full.set_title('State Machine -- All Transitions', fontsize=12, pad=8)
 
@@ -306,8 +375,8 @@ def make_transition_plot(survey, save_path=ROOTDIR/'transitions.png'):
     for i in range(n_star):
         ax = fig.add_subplot(gs_stars[i // n_cols, i % n_cols])
         visited, taken = _star_visits(survey, i)
-        _draw_fsm(ax, visited, taken, fontsize=5, shrink=4, mini=True)
-        final = _ABBREV[survey.stars[i].state]
+        _draw_fsm(ax, fsm_info, visited, taken, fontsize=5, shrink=4, mini=True)
+        final = fsm_info.abbrev[survey.stars[i].state]
         ax.set_title(f'Star {i} [{final}]', fontsize=8, pad=1)
 
     for i in range(n_star, n_rows * n_cols):
@@ -321,12 +390,13 @@ def make_transition_plot(survey, save_path=ROOTDIR/'transitions.png'):
 
 def _edge_label(t):
     s = t['trigger']
-    if t['conditions']:
-        s += '\n[' + ', '.join(t['conditions']) + ']'
+    parts = list(t['conditions']) + ['not ' + c for c in t['unless']]
+    if parts:
+        s += '\n[' + ', '.join(parts) + ']'
     return s
 
 
-def make_machine_doc_plot(survey, save_path=ROOTDIR/'machine.png'):
+def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png'):
     fig_w, fig_h = 13.0, 7.5
     fig = plt.figure(figsize=(fig_w, fig_h))
     gs = GridSpec(
@@ -338,19 +408,19 @@ def make_machine_doc_plot(survey, save_path=ROOTDIR/'machine.png'):
 
     # --- Top panel: annotated machine diagram ---
     ax = fig.add_subplot(gs[0])
-    _draw_fsm(ax, set(STATES), set(_ALL_TRANSITIONS), fontsize=10, shrink=16, mini=False)
+    _draw_fsm(ax, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
+              fontsize=10, shrink=16, mini=False)
     ax.set_title('State Machine -- Triggers and Guard Conditions', fontsize=12, pad=8)
 
     horiz_idx = 0
     diag_idx = 0
-    for t in _TRANSITIONS_FULL:
-        x0, y0 = _STATE_POS[t['src']]
-        x1, y1 = _STATE_POS[t['dst']]
+    for t in fsm_info.transitions_full:
+        x0, y0 = fsm_info.state_pos[t['src']]
+        x1, y1 = fsm_info.state_pos[t['dst']]
         mx, my = (x0 + x1) / 2, (y0 + y1) / 2
         label = _edge_label(t)
         if y0 == y1:
-            # horizontal arrow -- alternate between two y offsets so adjacent labels
-            # land on different rows and are less likely to overprint each other
+            # horizontal arrow -- alternate between two y offsets to reduce overprint
             y_off = 0.14 + 0.10 * (horiz_idx % 2)
             horiz_idx += 1
             ax.text(mx, my + y_off, label,
@@ -358,8 +428,7 @@ def make_machine_doc_plot(survey, save_path=ROOTDIR/'machine.png'):
                     color='#333', linespacing=1.3,
                     bbox=dict(facecolor='white', edgecolor='none', pad=1))
         else:
-            # diagonal arrow -- all midpoints share y=0.5, so stagger across three
-            # rows to reduce overplotting
+            # diagonal arrow -- stagger across three rows to reduce overplotting
             y_off = 0.13 * (diag_idx % 3) - 0.13
             diag_idx += 1
             ax.text(mx + 0.08, my + y_off, label,
@@ -373,19 +442,19 @@ def make_machine_doc_plot(survey, save_path=ROOTDIR/'machine.png'):
 
     cond_names = []
     seen = set()
-    for t in _TRANSITIONS_FULL:
-        for c in t['conditions']:
+    for t in fsm_info.transitions_full:
+        for c in t['conditions'] + t['unless']:
             if c not in seen:
                 cond_names.append(c)
                 seen.add(c)
 
-    col_w = max(len(n) for n in cond_names) + 2
+    col_w = max((len(n) for n in cond_names), default=0) + 2
     lines = ['Guard conditions\n' + '-' * 48]
     for name in cond_names:
         method = getattr(StarInfo, name, None)
         try:
             doc = next(iter((inspect.getdoc(method) or '').splitlines()), '') if method else ''
-        except:
+        except Exception:
             doc = f'No docstring found for {name}'
         lines.append(f'{name.ljust(col_w)}{doc}')
 
@@ -399,18 +468,20 @@ def make_machine_doc_plot(survey, save_path=ROOTDIR/'machine.png'):
     print(f"Saved to {save_path}")
 
 
-def make_strip_plot(survey, save_path=ROOTDIR/'strip.png'):
+def make_strip_plot(survey, fsm_info, save_path=ROOTDIR/'strip.png'):
     DRM = survey.DRM
     if not DRM:
         print("No observations recorded.")
         return
 
     YEAR = 365.25
-    N_YEARS = 5
+    N_YEARS = max(1, round(survey._specs['missionLife'] / YEAR))
     ADVANCE_COLOR = '#cccccc'
     STRIP_H = 0.45
 
     fig, axes = plt.subplots(N_YEARS, 1, sharex=True, figsize=(14, 7))
+    if N_YEARS == 1:
+        axes = [axes]
     fig.subplots_adjust(hspace=0.08, left=0.10, right=0.97, top=0.95, bottom=0.08)
 
     det_label_idx  = 0   # counts det  observations for above/below alternation
@@ -426,7 +497,7 @@ def make_strip_plot(survey, save_path=ROOTDIR/'strip.png'):
             color = ADVANCE_COLOR
         else:
             state = survey.state_history[k][obs['star_num']]
-            color = STATE_COLORS[state]
+            color = fsm_info.state_colors[state]
 
         # Categorical y-position; label index for above/below alternation
         if obs['mode'] is None:
@@ -477,11 +548,11 @@ def make_strip_plot(survey, save_path=ROOTDIR/'strip.png'):
     axes[0].set_xlim(0, YEAR)
     axes[-1].set_xlabel('Mission time [d]')
 
-    # Legend on Year 5 panel, lower left
+    # Legend on last panel, lower left
     state_patches = [
-        mpatches.Patch(facecolor=STATE_COLORS[s], alpha=0.7, edgecolor='none',
+        mpatches.Patch(facecolor=fsm_info.state_colors[s], alpha=0.7, edgecolor='none',
                        label=s.replace('_', ' '))
-        for s in STATES
+        for s in fsm_info.states
     ]
     dot_handles = [
         plt.Line2D([0], [0], marker='o', linestyle='none',
@@ -500,10 +571,11 @@ def make_strip_plot(survey, save_path=ROOTDIR/'strip.png'):
 
 def main():
     survey = run_one()
-    make_trace_plot(survey)
-    make_transition_plot(survey)
-    make_machine_doc_plot(survey)
-    make_strip_plot(survey)
+    fsm = FSMInfo(survey._specs)
+    make_trace_plot(survey, fsm)
+    make_transition_plot(survey, fsm)
+    make_machine_doc_plot(survey, fsm)
+    make_strip_plot(survey, fsm)
 
 
 if __name__ == '__main__':
