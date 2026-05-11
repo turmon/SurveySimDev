@@ -114,7 +114,6 @@ specs = {
         {
          'instName': 'spectro_NUV310_EMCCD',
          'systName': 'VVC575',
-         'tag': 'NUV',
          'uses': ['char_nuv'],
          'mode_num': 1,
          'int_factor_x': 1.0,
@@ -557,19 +556,30 @@ class SurveySimulation:
         self._print_summary()
 
     def _print_summary(self):
+        n_mode = self.os.n_mode
+        mode_labels = []
+        for m in range(n_mode):
+            uses = self.os.char_modes[m].get('uses', [])
+            lbl = uses[0].replace('char_', '') if uses else str(m)
+            mode_labels.append(lbl)
+        sep = '  '
+        col_w = 5
+        mode_w = n_mode * col_w + (n_mode - 1) * len(sep)
+        lbl_row = sep.join(f'{lbl:>{col_w}}' for lbl in mode_labels)
+        fixed0 = f"{'':>4}  {'':>5}  {'':>6}  {'':>5}  {'':>8}"
+        fixed2 = f"{'Star':>4}  {'dist':>5}  {'earths':>6}  {'n_det':>5}  {'n_det_ok':>8}"
         print(f"\n=== Final Star Outcomes "
               f"(mission time: {self.tk.current_time:.1f} / {self.tk.missionLife:.1f} days) ===")
-        # FIXME: use self.os.n_mode, not fixed indexes
-        print(f"{'Star':>4}  {'dist':>5}  {'earths':>6}  {'n_det':>5}  {'n_det_ok':>8}  "
-              f"{'nch_v':>5}  {'nch_n':>5}  {'nch_r':>5}  "
-              f"{'nok_v':>5}  {'nok_n':>5}  {'nok_r':>5}  state")
+        print(f"{fixed0}  {'n_char':^{mode_w}}  {'n_char_ok':^{mode_w}}")
+        print(f"{fixed2}  {lbl_row}  {lbl_row}  state")
         for s in self.stars:
             nc = s.n_char
             no = s.n_char_ok
+            nc_row = sep.join(f'{nc[m]:{col_w}d}' for m in range(n_mode))
+            no_row = sep.join(f'{no[m]:{col_w}d}' for m in range(n_mode))
             print(f"{s.star_num:4d}  {self.su.dist[s.star_num]:5.2f}  "
                   f"{s.earths:6d}  {s.n_det:5d}  {s.n_det_ok:8d}  "
-                  f"{nc[0]:5d}  {nc[1]:5d}  {nc[2]:5d}  "
-                  f"{no[0]:5d}  {no[1]:5d}  {no[2]:5d}  {s.state}")
+                  f"{nc_row}  {no_row}  {s.state}")
 
 def run_one():
     tk = TimeKeeping(specs)
