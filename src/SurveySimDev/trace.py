@@ -325,11 +325,14 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False):
         x0, y0 = fsm_info.state_pos[src]
         x1, y1 = fsm_info.state_pos[dst]
         is_taken = (src, dst) in taken
+        # Purely vertical arrows: shrink only along the box's narrow (height) axis,
+        # so halve the shrink to match box half-height rather than half-width.
+        s = max(2, shrink // 2) if x0 == x1 else shrink
         ap = dict(
             arrowstyle='->',
             color='#111' if is_taken else '#ddd',
             lw=lw if is_taken else 0.7,
-            shrinkA=shrink, shrinkB=shrink,
+            shrinkA=s, shrinkB=s,
         )
         rad = fsm_info.edge_rad[(src, dst)]
         if rad:
