@@ -1,3 +1,8 @@
+//
+// Three serial characterizations: VIS, NUV, NIR
+// 
+// Blind Search -> Orbit Characterization -> VIS -> NUV -> NIR
+//
 {
   "eta": 0.4,               // mean number of earths per star                       
   "missionLife": 1826.25,   // days -- total mission duration                       

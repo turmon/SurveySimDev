@@ -1,5 +1,7 @@
 //
-// Simple Blind Search/Orbit Characterization/VIS-range Characterization script
+// Simple One-band characterization
+//
+// Blind Search/Orbit Characterization/VIS-range Characterization
 //
 {
   "eta": 0.4,

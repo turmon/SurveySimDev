@@ -1,9 +1,10 @@
 
 
-# Run lines
+# Run line: Observing sequence only
 simple-trans:
 	uv run trans.py Scripts/specs-simple.json
 
+# Run line: Observing sequence plus plots
 simple-trace:
 	uv run trace.py Scripts/specs-simple.json
 
