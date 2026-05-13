@@ -2,7 +2,9 @@
 '''State-transition based scheduler demonstration
 '''
 
+import argparse
 import numpy as np
+from jsoncomment import JsonComment
 from transitions import Machine
 
 
@@ -559,7 +561,7 @@ class SurveySimulation:
                   f"{s.earths:6d}  {s.n_det:5d}  {s.n_det_ok:8d}  "
                   f"{nc_row}  {no_row}  {s.state}")
 
-def run_one():
+def run_one(specs):
     tk = TimeKeeping(specs)
     su = SimulatedUniverse(specs=specs)
     os = OpticalSystem(su, specs)
@@ -570,7 +572,17 @@ def run_one():
 
 
 def main():
-    run_one()
+    parser = argparse.ArgumentParser(description='Run survey simulation')
+    parser.add_argument('--seed', type=int, default=None, metavar='SEED',
+                        help='random seed (default: from specs, or 0)')
+    parser.add_argument('specs_file', metavar='SPECS',
+                        help='simulation parameters (JSONC format)')
+    args = parser.parse_args()
+    with open(args.specs_file) as f:
+        args.specs = JsonComment().load(f)
+    if args.seed is not None:
+        args.specs['seed'] = args.seed
+    run_one(args.specs)
 
 
 if __name__ == "__main__":

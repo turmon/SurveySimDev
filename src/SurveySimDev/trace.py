@@ -2,10 +2,13 @@
 '''Make "trace" plots of Survey Simulations
 '''
 
+import argparse
 from collections import deque
 from pathlib import Path
 import colorsys
 import inspect
+
+from jsoncomment import JsonComment
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -583,14 +586,29 @@ def make_strip_plot(survey, fsm_info, save_path=ROOTDIR/'strip.png'):
     print(f"Saved to {save_path}")
 
 
-def main():
-    survey = run_one()
+def simulate_and_plot(args):
+    survey = run_one(args.specs)
     fsm = FSMInfo(survey._specs)
-    make_trace_plot(survey, fsm)
-    make_transition_plot(survey, fsm)
-    make_machine_doc_plot(survey, fsm)
-    make_strip_plot(survey, fsm)
+    make_trace_plot(survey, fsm, save_path=args.output/'trace.png')
+    make_transition_plot(survey, fsm, save_path=args.output/'transitions.png')
+    make_machine_doc_plot(survey, fsm, save_path=args.output/'machine.png')
+    make_strip_plot(survey, fsm, save_path=args.output/'strip.png')
 
-
+def main():
+    parser = argparse.ArgumentParser(description='Plot survey simulation traces')
+    parser.add_argument('--seed', type=int, default=None, metavar='SEED',
+                        help='random seed (default: from specs, or 0)')
+    parser.add_argument('--output', default=ROOTDIR, metavar='DIR', type=Path,
+                        help='output directory (default: %(default)s)')
+    parser.add_argument('specs_file', metavar='SPECS',
+                        help='simulation parameters (JSONC format)')
+    args = parser.parse_args()
+    with open(args.specs_file) as f:
+        args.specs = JsonComment().load(f)
+    if args.seed is not None:
+        args.specs['seed'] = args.seed
+    args.output.mkdir(parents=True, exist_ok=True)
+    simulate_and_plot(args)
+    
 if __name__ == '__main__':
     main()
