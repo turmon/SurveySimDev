@@ -14,12 +14,7 @@
     "*": "unobserved"
   },
   "state_transitions": [
-    {
-      "trigger": "process_det",
-      "source": "unobserved",
-      "dest": "observing",
-      "unless": "det_exists"
-    },
+    {"trigger": "process_det", "source": "unobserved", "dest": "observing", "unless": "det_exists" },
     {
       "trigger": "process_det",
       "source": "unobserved",

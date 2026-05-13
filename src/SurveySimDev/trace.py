@@ -8,7 +8,7 @@ from pathlib import Path
 import colorsys
 import inspect
 
-from jsoncomment import JsonComment
+import json
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -601,10 +601,10 @@ def main():
     parser.add_argument('--output', default=ROOTDIR, metavar='DIR', type=Path,
                         help='output directory (default: %(default)s)')
     parser.add_argument('specs_file', metavar='SPECS',
-                        help='simulation parameters (JSONC format)')
+                        help='simulation parameters (JSON format)')
     args = parser.parse_args()
     with open(args.specs_file) as f:
-        args.specs = JsonComment().load(f)
+        args.specs = json.load(f)
     if args.seed is not None:
         args.specs['seed'] = args.seed
     args.output.mkdir(parents=True, exist_ok=True)

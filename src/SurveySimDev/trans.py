@@ -3,8 +3,8 @@
 '''
 
 import argparse
+import json
 import numpy as np
-from jsoncomment import JsonComment
 from transitions import Machine
 
 
@@ -576,10 +576,10 @@ def main():
     parser.add_argument('--seed', type=int, default=None, metavar='SEED',
                         help='random seed (default: from specs, or 0)')
     parser.add_argument('specs_file', metavar='SPECS',
-                        help='simulation parameters (JSONC format)')
+                        help='simulation parameters (JSON format)')
     args = parser.parse_args()
     with open(args.specs_file) as f:
-        args.specs = JsonComment().load(f)
+        args.specs = json.load(f)
     if args.seed is not None:
         args.specs['seed'] = args.seed
     run_one(args.specs)
