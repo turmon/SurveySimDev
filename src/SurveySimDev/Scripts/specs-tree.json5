@@ -16,27 +16,77 @@
   "state_initial": {
     "*": "unobserved"
   },
+  /* State description:
+    *  State   Meas-    Range  Phys.    WL (nm)
+    *  Name    urement         Target
+    *  -----   -------  -----  ------   -------
+    * 
+    * vis1      visw    VIS     H20      900nm
+    * vis2      viso    VIS     O2       754nm
+    * nir1/2/3  nir     NIR    CH4/CO2  1650nm
+    * nuv1/2/3  nuv     NUV    O3/Press  250nm
+    *
+    * Notation:
+    * "State Name" is the finite state machine name, equivalent to
+    * a node in the decision tree.
+    * "Measurement" is a shorthand for the measurement type, 
+    * which is linked to the measurement physical target, a
+    * wavelength range, and a specific retrieval algorithm.
+    * For us: specific parameters in "retrieval_models".
+    * That is, three states (nuv1/2/3) gather spectra around
+    * 250nm, and thereby estimate O3 and Pressure using
+    * "retrieval_models['nuv']". The same
+    * measurement is used at 3 places in the decision process.
+  */
   "state_transitions": [
     // these are OK
-    { "trigger": "process_det",  "source": "unobserved", "dest": "observing", "unless": "det_exists" },
+    { "trigger": "process_det",  "source": "unobserved", "dest": "observing", "unless":     "det_exists" },
     { "trigger": "process_det",  "source": "unobserved", "dest": "orbit_det", "conditions": "det_exists" },
     { "trigger": "process_det",  "source": "observing",  "dest": "retired",   "conditions": "det_exhausted",  "after": "forget_star" },
-    { "trigger": "process_det",  "source": "orbit_det",  "dest": "char_vis",  "conditions": ["has_orbit_count",
-											     "has_orbit_span"], "after": "promote_star" },
-    { "trigger": "process_det",  "source": "orbit_det",  "dest": "retired",   "conditions": "orbit_exhausted", "after": "forget_star" },
-    // Tailored state names and "conditions" needed
-    { "trigger": "process_char", "source": "char_vis",   "dest": "char_nuv",  "conditions": "char_exists" },
-    { "trigger": "process_char", "source": "char_vis",   "dest": "retired",   "conditions": "char_exhausted", "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_nuv",   "dest": "char_nir",  "conditions": "char_exists" },
-    { "trigger": "process_char", "source": "char_nuv",   "dest": "partial",   "conditions": "char_exhausted", "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_nir",   "dest": "success",   "conditions": "char_exists",    "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_nir",   "dest": "partial",   "conditions": "char_exhausted", "after": "forget_star" },
-    // Largely OK
-    { "trigger": "end_mission",  "source": ["char_nuv",
-					    "char_nir"], "dest": "partial" },
+    { "trigger": "process_det",  "source": "orbit_det",  "dest": "char_vis1", "conditions": ["has_orbit_count",
+									 		      "has_orbit_span"], "after": "promote_star" },
+    { "trigger": "process_det",  "source": "orbit_det",   "dest": "retired",  "conditions": "orbit_exhausted", "after": "forget_star" },
+    // VIS, Node vis1, H2O/CH4 ("visw")
+    { "trigger": "process_char", "source": "char_vis1", "dest": "dead_rocky", "conditions": "c_visw_H2O_no",    "after": "forget_star"  },
+    { "trigger": "process_char", "source": "char_vis1", "dest": "char_nir",   "conditions": "c_visw_H2O_yes_CH4_yes" },
+    { "trigger": "process_char", "source": "char_vis1", "dest": "char_visO2", "conditions": "c_visw_H2O_yes" },
+    { "trigger": "process_char", "source": "char_vis1", "dest": "retired",    "conditions": "char_exhausted",   "after": "forget_star" },
+    // VIS, Node vis2, O2 ("viso")
+    { "trigger": "process_char", "source": "char_vis2",  "dest": "dead_rocky","conditions": "c_viso_O2_high",   "after": "forget_star"  },
+    { "trigger": "process_char", "source": "char_vis2",  "dest": "char_nir1", "conditions": "c_viso_O2_medium" },
+    { "trigger": "process_char", "source": "char_vis2",  "dest": "char_nir2", "conditions": "c_viso_O2_no" },
+    { "trigger": "process_char", "source": "char_vis2",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    // NIR, Node nir1, CH4/CO2 ("nir")
+    { "trigger": "process_char", "source": "char_nir1",  "dest": "char_nuv1", "conditions": "c_nir_CH4_no" },
+    { "trigger": "process_char", "source": "char_nir1",  "dest": "mod_earth", "conditions": "c_nir_CH4_yes" },
+    { "trigger": "process_char", "source": "char_nir1",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    // NIR, Node nir2, CH4/CO2 ("nir")
+    { "trigger": "process_char", "source": "char_nir2",  "dest": "char_nuv3", "conditions": "c_nir_CH4_yes_CO2_yes" }, // right branch
+    { "trigger": "process_char", "source": "char_nir2",  "dest": "char_nuv2", "conditions": "c_nir_ok" },    // left branch ("else")
+    { "trigger": "process_char", "source": "char_nir2",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    // NIR, Node nir3, CO2  ("nir")
+    { "trigger": "process_char", "source": "char_nir3",  "dest": "ambiguous", "conditions": "c_nir_CO2_no",     "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_nir3",  "dest": "archean",   "conditions": "c_nir_CO2_yes",    "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_nir3",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    // NUV, Node nuv1, pressure ("nuv")
+    { "trigger": "process_char", "source": "char_nuv1",  "dest": "ambiguous", "conditions": "c_nuv_press_low",  "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_nuv1",  "dest": "modern",    "conditions": "c_nuv_press_high", "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_nuv1",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    // NUV, Node nuv2, O3 ("nuv")
+    { "trigger": "process_char", "source": "char_nuv2",  "dest": "proterozoic","conditions":"c_nuv_press_low",  "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_nuv2",  "dest": "ambiguous", "conditions": "c_nuv_press_high", "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_nuv2",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    // NUV, Node nuv3, O3 ("nuv")
+    { "trigger": "process_char", "source": "char_nuv3",  "dest": "archaen",   "conditions": "c_nuv_O3_no",      "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_nuv3",  "dest": "proterozoic","conditions":"c_nuv_O3_yes",     "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_nuv3",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    // sweep up
+    { "trigger": "end_mission",  "source": ["char_vis2",
+					    "char_nir1", "char_nir2", "char_nir3",
+					    "char_nuv1", "char_nuv2", "char_nuv3",],  "dest": "partial" },
     { "trigger": "end_mission",  "source": ["orbit_det",
-					    "char_vis"], "dest": "found" },
-    { "trigger": "end_mission",  "source": "observing",  "dest": "unknown" }
+					    "char_vis1"],  "dest": "found" },
+    { "trigger": "end_mission",  "source": "observing",   "dest": "unknown" }
   ],
   // Note on observingModes
   //  Extras (useful):
@@ -61,7 +111,7 @@
       "instName": "spectro910_R70_EMCCD",
       "systName": "VVC575",
       "uses": [
-        "char_vis_hi" // FIXME
+        "char_visw" // water band
       ],
       "mode_num": 0,
       "int_factor_x": 1.2,
@@ -70,50 +120,53 @@
       "lam": 910,
       "SNR": 5.0
     },
-    // FIXME: below is beginning of an extra VIS mode for the second tree branch
+    // VIS mode for O2
     {
-      "instName": "spectro910_R70_EMCCD_2", // FIXME (910 -> ?)
+      "instName": "spectro740_R70_EMCCD", // updated wavelength
       "systName": "VVC575",
       "uses": [
-        "char_vis_lo"  // FIXME
+        "char_viso"  // O2 band
       ],
       "mode_num": 1,
       "int_factor_x": 1.2,
       "comp_bound_x": 0.8,
       "detection": false,
-      "lam": 910,    // FIXME
+      "lam": 740,
       "SNR": 5.0
     },
     {
-      "instName": "spectro_NUV310_EMCCD",
+      "instName": "spectro_NUV254_EMCCD", // updated WL
       "systName": "VVC575",
       "uses": [
-        "char_nuv" // FIXME
+        "char_nuv"
       ],
       "mode_num": 2,
       "int_factor_x": 1.0,
       "comp_bound_x": 0.9,
       "detection": false,
-      "lam": 310,
+      "lam": 254,
       "SNR": 5.0
     },
     {
-      "instName": "spectro1500_R40_EMCCD",
+      "instName": "spectro1650_R40_EMCCD", // updated WL
       "systName": "VVC575",
       "uses": [
-        "char_nir" // FIXME
+        "char_nir"
       ],
       "mode_num": 3,
-      "int_factor_x": 2.0,
-      "comp_bound_x": 0.5,
+      "int_factor_x": 1.8,
+      "comp_bound_x": 0.8,
       "detection": false,
-      "lam": 1500,
+      "lam": 1650,
       "SNR": 8.5
     }
   ],
-  // FIXME: in principle these model keys match "uses[0]" above
+  // As noted above, there is one model per
+  // retrieval target -- in essence, a specific spectral bandwidth
+  // or set of science QOIs
   "retrieval_models": {
-    "char_VIShi": {
+    // VIS, water bands
+    "char_visw": {
       "H2O": {
         "no": 0.1,
         "yes": 0.6
@@ -123,14 +176,15 @@
         "yes": 0.6
       }
     },
-    "char_VISlo": {
+    // VIS, O2
+    "char_viso": {
       "O2": {
         "no": 0.2,
         "medium": 0.5,
         "high": 0.8
       }
     },
-    "char_NIR": {
+    "char_nir": {
       "CO2": {
         "no": 0.3,
         "yes": 0.7
@@ -140,12 +194,12 @@
         "yes": 0.7
       }
     },
-    "char_NUV": {
+    "char_nuv": {
       "O3": {
         "no": 0.2,
         "yes": 0.7
       },
-      "pressure": {
+      "press": {
         "low": 0.3,
         "high": 0.8
       }
