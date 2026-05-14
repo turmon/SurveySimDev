@@ -294,9 +294,8 @@ class SurveySimulation:
         char_cands = []
         for s in self.stars:
             for m in range(self.os.n_mode):
-                #print(f">> Try ({s.star_num}, {m})")
                 if self._char_eligible(s, m):
-                    print(f">> Elig ({s.star_num}, {m})")
+                    #print(f">> Elig ({s.star_num}, {m})")
                     if self.os.calc_intTime(s.star_num, m) <= self.intCutoff:
                         char_cands.append((s, m))
         # TODO print(f">> Got {len(char_cands)} chars")
@@ -345,10 +344,10 @@ class SurveySimulation:
         if char_ok:
             spectrum, snr = self.os.compute_spectrum(mode, star.star_num)
             retrieval = self.sr.spectral_retrieval(mode, star.state, star.star_num, spectrum, snr)
-            print(f"{star.star_num = } | {mode = }")
-            print(retrieval)
+            #print(f"{star.star_num = } | {mode = }")
+            #print(retrieval)
         else:
-            print("FAIL")
+            #print("FAIL")
             retrieval = self.sr.null_retrieval(mode, star.state, star.star_num)
         # update star's internal state
         star.n_char[mode] += 1

@@ -11,5 +11,8 @@ wheels/
 
 # Media churn area
 src/SurveySimDev/Media/*.png
+src/SurveySimDev/sims/
 
+# generated files
+src/SurveySimDev/Scripts/*.json
 
