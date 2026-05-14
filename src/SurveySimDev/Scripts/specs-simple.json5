@@ -64,6 +64,8 @@
       "SNR": 5.0
     }
   ],
+  // Purpose: basic single-band retrieval
+  // concept: defer: get the spectrum for later analysis
   "retrieval_models": {
     "char_vis": {},
   }

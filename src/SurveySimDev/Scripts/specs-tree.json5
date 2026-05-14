@@ -2,7 +2,8 @@
 // Decision tree observing sequence -- work in progress
 //
 {
-  "eta": 0.4,
+  "eta": 0.9, // lots of earths to feed the tree
+  "one_planet": true,
   "missionLife": 1826.25,
   "n_star": 30,
   "seed": 0,
@@ -48,8 +49,8 @@
     { "trigger": "process_det",  "source": "orbit_det",   "dest": "retired",  "conditions": "orbit_exhausted", "after": "forget_star" },
     // VIS, Node vis1, H2O/CH4 ("visw")
     { "trigger": "process_char", "source": "char_vis1", "dest": "dead_rocky", "conditions": "c_visw_H2O_no",    "after": "forget_star"  },
-    { "trigger": "process_char", "source": "char_vis1", "dest": "char_nir",   "conditions": "c_visw_H2O_yes_CH4_yes" },
-    { "trigger": "process_char", "source": "char_vis1", "dest": "char_visO2", "conditions": "c_visw_H2O_yes" },
+    { "trigger": "process_char", "source": "char_vis1", "dest": "char_nir3",  "conditions": "c_visw_H2O_yes_CH4_yes" },
+    { "trigger": "process_char", "source": "char_vis1", "dest": "char_vis2",  "conditions": "c_visw_H2O_yes" },
     { "trigger": "process_char", "source": "char_vis1", "dest": "retired",    "conditions": "char_exhausted",   "after": "forget_star" },
     // VIS, Node vis2, O2 ("viso")
     { "trigger": "process_char", "source": "char_vis2",  "dest": "dead_rocky","conditions": "c_viso_O2_high",   "after": "forget_star"  },
@@ -58,7 +59,7 @@
     { "trigger": "process_char", "source": "char_vis2",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
     // NIR, Node nir1, CH4/CO2 ("nir")
     { "trigger": "process_char", "source": "char_nir1",  "dest": "char_nuv1", "conditions": "c_nir_CH4_no" },
-    { "trigger": "process_char", "source": "char_nir1",  "dest": "mod_earth", "conditions": "c_nir_CH4_yes" },
+    { "trigger": "process_char", "source": "char_nir1",  "dest": "modern",    "conditions": "c_nir_CH4_yes" },
     { "trigger": "process_char", "source": "char_nir1",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
     // NIR, Node nir2, CH4/CO2 ("nir")
     { "trigger": "process_char", "source": "char_nir2",  "dest": "char_nuv3", "conditions": "c_nir_CH4_yes_CO2_yes" }, // right branch
@@ -77,7 +78,7 @@
     { "trigger": "process_char", "source": "char_nuv2",  "dest": "ambiguous", "conditions": "c_nuv_press_high", "after": "forget_star" },
     { "trigger": "process_char", "source": "char_nuv2",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
     // NUV, Node nuv3, O3 ("nuv")
-    { "trigger": "process_char", "source": "char_nuv3",  "dest": "archaen",   "conditions": "c_nuv_O3_no",      "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_nuv3",  "dest": "archean",   "conditions": "c_nuv_O3_no",      "after": "forget_star" },
     { "trigger": "process_char", "source": "char_nuv3",  "dest": "proterozoic","conditions":"c_nuv_O3_yes",     "after": "forget_star" },
     { "trigger": "process_char", "source": "char_nuv3",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
     // sweep up
@@ -111,7 +112,7 @@
       "instName": "spectro910_R70_EMCCD",
       "systName": "VVC575",
       "uses": [
-        "char_visw" // water band
+        "char_vis1" // water band
       ],
       "mode_num": 0,
       "int_factor_x": 1.2,
@@ -125,7 +126,7 @@
       "instName": "spectro740_R70_EMCCD", // updated wavelength
       "systName": "VVC575",
       "uses": [
-        "char_viso"  // O2 band
+        "char_vis2"  // O2 band
       ],
       "mode_num": 1,
       "int_factor_x": 1.2,
@@ -135,38 +136,43 @@
       "SNR": 5.0
     },
     {
+      "instName": "spectro1650_R40_EMCCD", // updated WL
+      "systName": "VVC575",
+      "uses": [
+        "char_nir1",
+        "char_nir2",
+        "char_nir3",
+      ],
+      "mode_num": 2,
+      "int_factor_x": 1.8,
+      "comp_bound_x": 0.8,
+      "detection": false,
+      "lam": 1650,
+      "SNR": 8.5
+    },
+    {
       "instName": "spectro_NUV254_EMCCD", // updated WL
       "systName": "VVC575",
       "uses": [
-        "char_nuv"
+        "char_nuv1",
+        "char_nuv2",
+        "char_nuv3",
       ],
-      "mode_num": 2,
+      "mode_num": 3,
       "int_factor_x": 1.0,
       "comp_bound_x": 0.9,
       "detection": false,
       "lam": 254,
       "SNR": 5.0
     },
-    {
-      "instName": "spectro1650_R40_EMCCD", // updated WL
-      "systName": "VVC575",
-      "uses": [
-        "char_nir"
-      ],
-      "mode_num": 3,
-      "int_factor_x": 1.8,
-      "comp_bound_x": 0.8,
-      "detection": false,
-      "lam": 1650,
-      "SNR": 8.5
-    }
   ],
-  // As noted above, there is one model per
+  // As noted above, there is one model per mode_num, a.k.a.,
   // retrieval target -- in essence, a specific spectral bandwidth
   // or set of science QOIs
+  // This is indexed by mode_num now, which I don't like
   "retrieval_models": {
     // VIS, water bands
-    "char_visw": {
+    "QOIs_0": {
       "H2O": {
         "no": 0.1,
         "yes": 0.6
@@ -177,14 +183,14 @@
       }
     },
     // VIS, O2
-    "char_viso": {
+    "QOIs_1": {
       "O2": {
         "no": 0.2,
         "medium": 0.5,
         "high": 0.8
       }
     },
-    "char_nir": {
+    "QOIs_2": {
       "CO2": {
         "no": 0.3,
         "yes": 0.7
@@ -194,7 +200,7 @@
         "yes": 0.7
       }
     },
-    "char_nuv": {
+    "QOIs_3": {
       "O3": {
         "no": 0.2,
         "yes": 0.7
