@@ -116,11 +116,25 @@ class FSMInfo:
         pos = {}
         for i, s in enumerate(self.states[:self._n_top_row]):
             pos[s] = (float(i), 1.0)
-        for s in self.states[self._n_top_row:]:
+        bottom = self.states[self._n_top_row:]
+        raw_x = {}
+        for s in bottom:
             pred_xs = [pos[p][0]
                        for p in {t['src'] for t in self.transitions_full
                                  if t['dst'] == s and t['src'] in pos}]
-            pos[s] = (sum(pred_xs) / len(pred_xs) if pred_xs else 0.0, 0.0)
+            raw_x[s] = sum(pred_xs) / len(pred_xs) if pred_xs else 0.0
+        # Spread bottom-row states to guarantee minimum 1-unit gap, preserving centroid.
+        if len(bottom) > 1:
+            order = sorted(bottom, key=lambda s: raw_x[s])
+            xs = [raw_x[s] for s in order]
+            for i in range(1, len(xs)):
+                xs[i] = max(xs[i], xs[i - 1] + 1.0)
+            orig_cx = sum(raw_x[s] for s in order) / len(order)
+            shift = orig_cx - sum(xs) / len(xs)
+            for s, x in zip(order, xs):
+                raw_x[s] = x + shift
+        for s in bottom:
+            pos[s] = (raw_x[s], 0.0)
         return pos
 
     def _auto_colors(self):
@@ -391,8 +405,10 @@ def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png'):
         ax = fig.add_subplot(gs_stars[i // n_cols, i % n_cols])
         visited, taken = _star_visits(survey, i)
         _draw_fsm(ax, fsm_info, visited, taken, fontsize=5, shrink=4, mini=True)
-        final = fsm_info.abbrev[survey.stars[i].state]
-        ax.set_title(f'Star {i} [{final}]', fontsize=8, pad=1)
+        # there is plenty of room to leave the title long
+        # final = fsm_info.abbrev[survey.stars[i].state]
+        final = survey.stars[i].state
+        ax.set_title(f'Star {i}\n[{final}]', fontsize=8, pad=1)
 
     for i in range(n_star, n_rows * n_cols):
         ax = fig.add_subplot(gs_stars[i // n_cols, i % n_cols])
