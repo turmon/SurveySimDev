@@ -185,7 +185,7 @@ class FSMInfo:
         return rads
 
     def _auto_edge_shade(self):
-        _SHADES = ['#111111', '#555555', '#aaaaaa']
+        _SHADES = ['#111111', '#666666', '#aaaaaa']
         shade = {}
         src_count = {}
         for src, dst in self.all_transitions:
