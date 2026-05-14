@@ -50,6 +50,7 @@ class FSMInfo:
         self.abbrev = self._make_abbrev()
         self.dot_styles = self._auto_dot_styles(specs.get('observingModes', []))
         self.edge_rad = self._auto_edge_rad()
+        self.edge_shade = self._auto_edge_shade()
         self.success_state = self._top_row_term  # may be None
 
     def _normalize_transitions(self, raw):
@@ -115,7 +116,7 @@ class FSMInfo:
     def _auto_pos(self):
         pos = {}
         for i, s in enumerate(self.states[:self._n_top_row]):
-            pos[s] = (float(i), 1.0)
+            pos[s] = (float(i), 1.2)
         bottom = self.states[self._n_top_row:]
         raw_x = {}
         for s in bottom:
@@ -157,8 +158,10 @@ class FSMInfo:
         return '\n'.join(p.upper() if len(p) <= 3 else p for p in parts)
 
     def _make_abbrev(self):
-        raw = {s: ((s.split('_')[0][0] + s.split('_')[1][0]) if '_' in s else s[:2])
-               for s in self.states}
+        raw = {}
+        for s in self.states:
+            stem = s[len('char_'):] if s.startswith('char_') else s
+            raw[s] = stem[:3]
         count = {}
         for ab in raw.values():
             count[ab] = count.get(ab, 0) + 1
@@ -168,7 +171,7 @@ class FSMInfo:
             if count[ab] > 1:
                 n = seen.get(ab, 0)
                 seen[ab] = n + 1
-                abbrev[s] = ab[0] + str(n)
+                abbrev[s] = ab[:2] + str(n)
             else:
                 abbrev[s] = ab
         return abbrev
@@ -180,6 +183,16 @@ class FSMInfo:
             x1, y1 = self.state_pos[dst]
             rads[(src, dst)] = (0.25 if y0 == y1 and abs(x1 - x0) > 1.05 else 0.0)
         return rads
+
+    def _auto_edge_shade(self):
+        _SHADES = ['#111111', '#555555', '#aaaaaa']
+        shade = {}
+        src_count = {}
+        for src, dst in self.all_transitions:
+            n = src_count.get(src, 0)
+            shade[(src, dst)] = _SHADES[n % 3]
+            src_count[src] = n + 1
+        return shade
 
     def _auto_dot_styles(self, observing_modes):
         _CHAR_COLORS = ['#2ca02c', '#9e9ac8', '#fc8d59', '#e7ba52', '#6baed6']
@@ -335,7 +348,7 @@ def _star_visits(survey, star_idx):
     return visited, taken
 
 
-def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False):
+def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False, shade=False):
     """Draw a state machine diagram; visited/taken control fill and arrow weight."""
     lw = 1.5 if mini else 2.0
     for src, dst in fsm_info.all_transitions:
@@ -345,9 +358,13 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False):
         # Purely vertical arrows: shrink only along the box's narrow (height) axis,
         # so halve the shrink to match box half-height rather than half-width.
         s = max(2, shrink // 2) if x0 == x1 else shrink
+        if is_taken and shade:
+            color = fsm_info.edge_shade[(src, dst)]
+        else:
+            color = '#111' if is_taken else '#ddd'
         ap = dict(
             arrowstyle='->',
-            color='#111' if is_taken else '#ddd',
+            color=color,
             lw=lw if is_taken else 0.7,
             shrinkA=s, shrinkB=s,
         )
@@ -377,7 +394,7 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False):
 
 def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png'):
     n_star = survey.su.n_star
-    n_cols = 6
+    n_cols = 5
     n_rows = (n_star + n_cols - 1) // n_cols
 
     fig_h = 4.0 + n_rows * 2.0
@@ -394,7 +411,7 @@ def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png'):
     # Full machine
     ax_full = fig.add_subplot(gs[0])
     _draw_fsm(ax_full, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
-              fontsize=9, shrink=14, mini=False)
+              fontsize=9, shrink=14, mini=False, shade=True)
     ax_full.set_title('State Machine -- All Transitions', fontsize=12, pad=8)
 
     # Per-star grid
@@ -440,7 +457,7 @@ def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png'):
     # --- Top panel: annotated machine diagram ---
     ax = fig.add_subplot(gs[0])
     _draw_fsm(ax, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
-              fontsize=10, shrink=16, mini=False)
+              fontsize=10, shrink=16, mini=False, shade=True)
     ax.set_title('State Machine -- Triggers and Guard Conditions', fontsize=12, pad=8)
 
     horiz_idx = 0

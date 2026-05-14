@@ -16,3 +16,7 @@ simple-trace:
 %.json: %.jsonc
 	uv run util/json5_to_json.py < $< > $@
 
+
+# programmatically generate predicates for the decision tree mixin
+tree-predicates:
+	python gen_predicates.py > StarInfoTree.py
