@@ -6,142 +6,7 @@ import argparse
 import json
 import numpy as np
 from transitions import Machine
-
-
-############################################################
-#
-# --- Spectral retrieval parametric settings (for entry into "specs" below)
-
-# Purpose: basic multi-band retrieval
-# concept: all are deferred: get the spectrum for later analysis
-retrieval_models_defer = {
-    'char_vis': {},
-    'char_nir': {},
-    'char_nuv': {},
-}
-
-# Purpose: multi-possibility Young et al. decision-tree retrieval
-# concept: "analysis" is assignment of levels to constituents
-# key is the *observing state* (which is unique)
-retrieval_models_decision_tree = {
-    'char_VIShi': {
-        'H2O': {'no':0.1, 'yes': 0.6},
-        'CH4': {'no':0.1, 'yes': 0.6},
-        },
-    'char_VISlo': {
-        'O2':  {'no':0.2, 'medium':0.5, 'high': 0.8},
-        },
-    'char_NIR': {
-        'CO2': {'no':0.3, 'yes': 0.7},
-        'CH4': {'no':0.4, 'yes': 0.7},
-        },
-    'char_NUV': {
-        'O3': {'no': 0.2, 'yes': 0.7},
-        'pressure': {'low': 0.3, 'high': 0.8},
-    }
-}
-
-############################################################
-#
-# --- "specs" (abbreviated)
-#
-# Note on observingModes
-#   Extras (useful):
-#     uses: links the SurveySimulation state to this observingMode
-#     mode_num: it's explicit here, but real EXOSIMS inserts it dynamically
-#   Extras (non-physical, added just to run the sim):
-#     int_factor_x: intTime multiplier per char mode (just for a mockup)
-#     comp_bound_x: lower bound of completeness per mode (just for a mockup)
-
-specs = {
-    'eta':          0.4,             # mean number of earths per star
-    'missionLife':  5 * 365.25,      # days -- total mission duration
-    'n_star':       30,              # number of stars in the simulated catalog
-    'seed':         0,               # RNG seed; 0 means unseeded (random)
-    'n_det_remove': 4,               # failed det attempts before retiring a star
-    'n_char_remove': 2,              # char attempts per mode before retiring
-    'intCutoff':      60.0,            # days -- skip char observations longer than this
-    'revisit_wait': 0.3 * 365.25,   # days -- min gap after any detection attempt
-    'gap_required': 0.5 * 365.25,   # days -- min temporal baseline for orbit determination
-    'obs_overhead':  0.2,            # days -- overhead added to every observation
-    'char_overhead': 0.8,            # days -- additional overhead for characterizations
-    'state_initial': {'*': 'unobserved'},
-    'state_transitions': [
-        # det-related
-        {'trigger': 'process_det',   'source': 'unobserved', 'dest': 'observing', 'unless': 'det_exists'},
-        {'trigger': 'process_det',   'source': 'unobserved', 'dest': 'orbit_det', 'conditions': 'det_exists'},
-        {'trigger': 'process_det',   'source': 'observing',  'dest': 'retired',   'conditions': 'det_exhausted', 
-                                                                                  'after': 'forget_star'},
-        {'trigger': 'process_det',   'source': 'orbit_det',  'dest': 'char_vis',  'conditions': ['has_orbit_count',
-                                                                                                 'has_orbit_span'],
-                                                                                  'after': 'promote_star'},
-        {'trigger': 'process_det',   'source': 'orbit_det',  'dest': 'retired',   'conditions': 'orbit_exhausted',
-                                                                                  'after': 'forget_star'},
-        # char-related
-        {'trigger': 'process_char',  'source': 'char_vis',   'dest': 'char_nuv',  'conditions': 'char_exists'},
-        {'trigger': 'process_char',  'source': 'char_vis',   'dest': 'retired',   'conditions': 'char_exhausted',
-                                                                                  'after': 'forget_star'},
-        {'trigger': 'process_char',  'source': 'char_nuv',   'dest': 'char_nir',  'conditions': 'char_exists'},
-        {'trigger': 'process_char',  'source': 'char_nuv',   'dest': 'partial',   'conditions': 'char_exhausted',
-                                                                                  'after': 'forget_star'},
-        {'trigger': 'process_char',  'source': 'char_nir',   'dest': 'success',   'conditions': 'char_exists',
-                                                                                  'after': 'forget_star'},
-        {'trigger': 'process_char',  'source': 'char_nir',   'dest': 'partial',   'conditions': 'char_exhausted',
-                                                                                  'after': 'forget_star'},
-
-        # end-of-mission
-        {'trigger': 'end_mission',   'source': ['char_nuv', 'char_nir'], 'dest': 'partial'},
-        {'trigger': 'end_mission',   'source': ['orbit_det', 'char_vis'], 'dest': 'found'},
-        {'trigger': 'end_mission',   'source': 'observing', 'dest': 'unknown'},
-    ],
-    'observingModes': [
-        {
-         'instName': 'imaging_BroadbandVisible_500',
-         'systName': 'VVC500',
-         'uses': [],
-         'mode_num': -1,
-         'int_factor_x': 1.0,
-         'comp_bound_x': 0.1,
-         'detection': True,
-         'lam': 500,
-         'SNR': 7,
-         },
-        {
-         'instName': 'spectro910_R70_EMCCD',
-         'systName': 'VVC575',
-         'uses': ['char_vis'],
-         'mode_num': 0,
-         'int_factor_x': 1.2,
-         'comp_bound_x': 0.8,
-         'detection': False,
-         'lam': 910,
-         'SNR': 5.0,
-         },
-        {
-         'instName': 'spectro_NUV310_EMCCD',
-         'systName': 'VVC575',
-         'uses': ['char_nuv'],
-         'mode_num': 1,
-         'int_factor_x': 1.0,
-         'comp_bound_x': 0.9,
-         'detection': False,
-         'lam': 310,
-         'SNR': 5.0
-         },
-        {
-         'instName': 'spectro1500_R40_EMCCD',
-         'systName': 'VVC575',
-         'uses': ['char_nir'],
-         'mode_num': 2,
-         'int_factor_x': 2.0,
-         'comp_bound_x': 0.5,
-         'detection': False,
-         'lam': 1500,
-         'SNR': 8.5
-         },
-  ],
-  'retrieval_models': retrieval_models_defer,
-}
+from StarInfoTree import StarInfoTreeMixin
 
 
 def _states_from_transitions(transitions):
@@ -180,7 +45,10 @@ class SimulatedUniverse:
         self.rng = np.random.default_rng(seed)
         self.eta = specs['eta']
         self.n_star = n_star
-        self.earths = self.rng.poisson(self.eta, size=n_star)
+        if specs.get('one_planet', False):
+            self.earths = self.rng.binomial(1, self.eta, size=n_star)
+        else:
+            self.earths = self.rng.poisson(self.eta, size=n_star)
         self.dist = self.rng.uniform(1.0, 10.0, size=n_star)
         # detection mode stuff
         self.det_mode = [om for om in specs['observingModes'] if om['detection']][0]
@@ -233,7 +101,7 @@ class SpectralRetrieval:
         analysis = {'all': 'deferred'}
         return dict(analysis=analysis)
 
-    def retrieval_analysis(self, model, star, spectrum, snr):
+    def retrieval_analysis(self, model, star_num, spectrum, snr):
         # Goal: produce analysis that says "CO2:high", etc.
         analysis = dict()
         for i, (qoi, levels) in enumerate(model.items()):
@@ -255,17 +123,19 @@ class SpectralRetrieval:
         telling for each QOI (e.g., CH4), what was deduced from the spectrum.
         '''
         # (note that obs_state is also in the mode)
-        spectral_model = self.retrieval_models.get(obs_state, {})
+        spectral_model = self.retrieval_models.get(f"QOIs_{mode}", {})
         if spectral_model:
-            info = self.retrieval_analysis(spectral_model, star, spectrum, snr)
+            info = self.retrieval_analysis(spectral_model, star_num, spectrum, snr)
         else:
+            print("** No spectral model")
+            breakpoint()
             info = self.retrieval_deferred()
         return {
             'char_ok': True,
             **info}
 
 
-class StarInfo:
+class StarInfo(StarInfoTreeMixin):
     n_mode = None
     def __init__(self, star_num, earths, gap_required, n_det_remove, n_char_remove):
         if not self.n_mode:
@@ -413,6 +283,11 @@ class SurveySimulation:
         if not star.promoted:
             return False
         # are we allowed to use the desired observing mode?
+        if star.star_num == 13 and star.promoted:
+            pass
+            # FIXME
+            #print("BREAK in Eligible")
+            #breakpoint()
         if star.state not in self.os.char_modes[mode]['uses']:
             return False
         return True
@@ -421,9 +296,12 @@ class SurveySimulation:
         char_cands = []
         for s in self.stars:
             for m in range(self.os.n_mode):
+                #print(f">> Try ({s.star_num}, {m})")
                 if self._char_eligible(s, m):
+                    print(f">> Elig ({s.star_num}, {m})")
                     if self.os.calc_intTime(s.star_num, m) <= self.intCutoff:
                         char_cands.append((s, m))
+        # TODO print(f">> Got {len(char_cands)} chars")
         if char_cands:
             # rank by C/t
             best, mode = max(char_cands,
@@ -469,7 +347,10 @@ class SurveySimulation:
         if char_ok:
             spectrum, snr = self.os.compute_spectrum(mode, star.star_num)
             retrieval = self.sr.spectral_retrieval(mode, star.state, star.star_num, spectrum, snr)
+            print(f"{star.star_num = } | {mode = }")
+            print(retrieval)
         else:
+            print("FAIL")
             retrieval = self.sr.null_retrieval(mode, star.state, star.star_num)
         # update star's internal state
         star.n_char[mode] += 1
@@ -485,7 +366,7 @@ class SurveySimulation:
         return drm
 
     def observation_advance(self):
-        active = [s for s in self.stars if not s.is_retired() and not s.is_success()]
+        active = [s for s in self.stars if s.eligible]
         if not active:
             return False
         t0 = self.tk.current_time
@@ -515,14 +396,14 @@ class SurveySimulation:
             star, mode = self.next_target()
 
             # 3/ execute observation or time-advance
-            if mode == -1:
-                drm = self.observation_detection(star)
-            elif mode >= 0:
-                drm = self.observation_characterization(star, mode)
-            elif mode is None:
+            if mode is None:
                 drm = self.observation_advance()
                 if not drm:
                     break # nothing more to do
+            elif mode == -1:
+                drm = self.observation_detection(star)
+            elif mode >= 0:
+                drm = self.observation_characterization(star, mode)
             else:
                 raise RuntimeError('Bad mode')
 
