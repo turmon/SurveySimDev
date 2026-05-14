@@ -127,8 +127,6 @@ class SpectralRetrieval:
         if spectral_model:
             info = self.retrieval_analysis(spectral_model, star_num, spectrum, snr)
         else:
-            print("** No spectral model")
-            breakpoint()
             info = self.retrieval_deferred()
         return {
             'char_ok': True,

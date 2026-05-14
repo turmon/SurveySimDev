@@ -1,5 +1,8 @@
 
-predicates = [
+LITERAL = False
+
+if LITERAL:
+    predicates = [
     "c_visw_H2O_no",
     "c_visw_H2O_yes_CH4_yes",
     "c_visw_H2O_yes",
@@ -19,6 +22,11 @@ predicates = [
     "c_nuv_O3_no",
     "c_nuv_O3_yes"
     ]
+else:
+    with open('sr_tree_predicates.txt', 'r') as f:
+        all_predicates = f.read().splitlines()
+    predicates = [p for p in all_predicates if p.startswith('sr_')]
+
 
 any_template = '''
     def {f_name}(self, mode=None, retrieval=None):
@@ -55,10 +63,11 @@ print('class StarInfoTreeMixin:')
 for p in predicates:
     parts = p.split("_")
     f_name = p
-    meas = parts[1] # e.g., "nuv"
-    tail = parts[2:]
+    # meas = parts[1] # e.g., "nuv" -- NOT ANY MORE
+    meas = "undefined"
+    tail = parts[1:]
     #print(f"% {f_name}")
-    if parts[2] == 'ok':
+    if parts[1] == 'ok':
         print(any_template.format(f_name=f_name))
     else:
         qois = ', '.join([f'"{s}"' for s in tail[0::2]])

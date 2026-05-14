@@ -102,8 +102,8 @@
     *   concept: all are deferred: get the spectrum for later analysis
   */
   "retrieval_models": {
-    "char_vis": {},
-    "char_nir": {},
-    "char_nuv": {}
+    "QOIs_0": {},
+    "QOIs_1": {},
+    "QOIs_2": {}
   }
 }
