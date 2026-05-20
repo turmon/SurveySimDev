@@ -21,6 +21,7 @@
   "state_transitions": [
     { "trigger": "process_det",  "source": "unobserved", "dest": "observing", "unless": "det_exists" },
     { "trigger": "process_det",  "source": "unobserved", "dest": "orbit_det", "conditions": "det_exists" },
+    { "trigger": "process_det",  "source": "observing",  "dest": "orbit_det", "conditions": "det_exists" },
     { "trigger": "process_det",  "source": "observing",  "dest": "retired",   "conditions": "det_exhausted",  "after": "forget_star" },
     { "trigger": "process_det",  "source": "orbit_det",  "dest": "char_vis",  "conditions": ["has_orbit_count",
 											     "has_orbit_span"], "after": "promote_star" },
