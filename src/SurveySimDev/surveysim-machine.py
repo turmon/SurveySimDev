@@ -28,7 +28,7 @@ _AX_W = _FIG_W * (_AX_R - _AX_L)   # physical axis width  (~12.48 in)
 _AX_H = _FIG_H * (_AX_T - _AX_B)   # physical axis height (~6.68 in)
 _D_MIN = 1.30   # min center-to-center in inch-scale data units (> any node box)
 _DEEMPH_WEIGHT = 5.0  # edge weight for de-emphasized nodes (larger = weaker KK spring)
-_DEEMPH_EDGE_COLOR = '#cccccc'
+_DEEMPH_EDGE_COLOR = '#999999'
 _DEEMPH_EDGE_LW = 0.8
 
 
@@ -47,6 +47,9 @@ def _scale_and_spread(pos_in, uniform=True):
     uniform=False (multipartite): stretch x and y independently to fill 85%,
                                   so layers and within-layer spacing both fill
                                   the figure without distorting either axis.
+
+    Objective: Prevent overplotting of graph vertices, which can be severe,
+    especially for vertices with common ancestors.
     '''
     nodes = list(pos_in.keys())
     arr = np.array([[pos_in[s][0], pos_in[s][1]] for s in nodes], dtype=float)
@@ -184,7 +187,7 @@ def _draw_machine(ax, fsm_info, t_rads, deemphasize=frozenset()):
         ly = my + label_offset * py
         ax.text(lx, ly, _edge_label(t),
                 ha='center', va='center', fontsize=label_fs,
-                color=color, linespacing=1.3, zorder=2,
+                color=color, linespacing=1.3, zorder=2 if dst in deemphasize else 3,
                 bbox=dict(facecolor='white', edgecolor='none', pad=1))
 
     for state, (x, y) in pos.items():
@@ -233,11 +236,11 @@ def main():
     if args.layout == 'multipartite':
         raw_pos = _multipartite_pos(G, fsm_info.initial)
         fsm_info.state_pos = _scale_and_spread(raw_pos, uniform=False)
-        title = 'State Machine -- NetworkX (Multipartite/BFS-Depth) Layout'
+        title = 'Survey Simulation Star-State Transitions\n(Multipartite/BFS-Depth Layout)'
     else:
         raw_pos = nx.kamada_kawai_layout(G, weight='weight')
         fsm_info.state_pos = _scale_and_spread(raw_pos)
-        title = 'State Machine -- NetworkX (Kamada-Kawai) Layout'
+        title = 'Survey Simulation Star-State Transitions\n(Kamada-Kawai Layout)'
 
     t_rads = _assign_t_rads(fsm_info.transitions_full)
 
