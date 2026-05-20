@@ -218,7 +218,7 @@ def _draw_machine(ax, fsm_info, t_rads, deemphasize=frozenset()):
         ax.text(lx, ly, _edge_label(t),
                 ha='center', va='center', fontsize=label_fs,
                 color=color, linespacing=1.3, zorder=2 if dst in deemphasize else 3,
-                bbox=dict(facecolor='white', edgecolor='none', pad=1))
+                bbox=dict(facecolor='white', edgecolor='none', pad=1, alpha=0.70))
 
     for state, (x, y) in pos.items():
         if state in deemphasize:
