@@ -30,6 +30,10 @@ _D_MIN = 1.30   # min center-to-center in inch-scale data units (> any node box)
 _DEEMPH_WEIGHT = 5.0  # edge weight for de-emphasized nodes (larger = weaker KK spring)
 _DEEMPH_EDGE_COLOR = '#999999'
 _DEEMPH_EDGE_LW = 0.8
+_CHAR_W_PT = 0.5 * 10    # approx char width at fontsize=10
+_LINE_H_PT = 1.2 * 10    # line height at fontsize=10
+_BOX_PAD_PT = 0.3 * 10   # box padding per side (pad=0.3 in boxstyle)
+_ARROW_MARGIN_PT = 2.0   # extra clearance past box edge
 
 
 def _edge_label(t):
@@ -38,6 +42,32 @@ def _edge_label(t):
     if parts:
         s += '\n[' + ', '.join(parts) + ']'
     return s
+
+
+def _shrink_pts(label, dx, dy):
+    '''Return FancyArrowPatch shrink (in display points) for a node box approached from
+    direction (dx, dy) in data coordinates.
+
+    W and H are the box half-extents in display points:
+      W = half the text width  = (max chars per line * _CHAR_W_PT) / 2  +  pad per side
+      H = half the text height = (number of lines   * _LINE_H_PT) / 2  +  pad per side
+
+    For a rectangular box, the distance from center to the edge along direction (cos_t, sin_t)
+    is min(W / cos_t, H / sin_t), with special cases for horizontal and vertical arrows.
+    An extra _ARROW_MARGIN_PT is added to leave a small visible gap at the box boundary.
+    '''
+    lines = label.split('\n')
+    W = max(len(line) for line in lines) * _CHAR_W_PT / 2 + _BOX_PAD_PT
+    H = len(lines) * _LINE_H_PT / 2 + _BOX_PAD_PT
+    hyp = np.hypot(dx, dy) or 1.0
+    cos_t, sin_t = abs(dx) / hyp, abs(dy) / hyp
+    if sin_t < 1e-9:
+        edge = W
+    elif cos_t < 1e-9:
+        edge = H
+    else:
+        edge = min(W / cos_t, H / sin_t)
+    return edge + _ARROW_MARGIN_PT
 
 
 def _scale_and_spread(pos_in, uniform=True):
@@ -164,16 +194,16 @@ def _draw_machine(ax, fsm_info, t_rads, deemphasize=frozenset()):
             lw = 2.0
             label_fs = 6
 
-        # Halve shrink for near-vertical arrows to match box half-height.
-        s = 8 if abs(x0 - x1) < 0.05 * abs(y0 - y1) else 16
-        ap = dict(arrowstyle='->', color=color, lw=lw, shrinkA=s, shrinkB=s)
+        dx, dy = x1 - x0, y1 - y0
+        ap = dict(arrowstyle='->', color=color, lw=lw,
+                  shrinkA=_shrink_pts(fsm_info.full_label[src], dx, dy),
+                  shrinkB=_shrink_pts(fsm_info.full_label[dst], dx, dy))
         if rad:
             ap['connectionstyle'] = f'arc3,rad={rad}'
         ax.annotate('', xy=(x1, y1), xytext=(x0, y0), arrowprops=ap, zorder=1)
 
         # Label at arc midpoint, offset perpendicular to the edge.
         mx, my = (x0 + x1) / 2, (y0 + y1) / 2
-        dx, dy = x1 - x0, y1 - y0
         length = np.hypot(dx, dy)
         if length > 0:
             px, py = -dy / length, dx / length  # CCW perpendicular unit vector
