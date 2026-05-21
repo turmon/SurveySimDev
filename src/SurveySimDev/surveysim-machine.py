@@ -232,7 +232,7 @@ def _draw_machine(ax, fsm_info, t_rads, deemphasize=frozenset()):
             edge = '#333'
             elw = 1.2
         ax.text(x, y, fsm_info.full_label[state],
-                ha='center', va='center', fontsize=10, color=text_color, zorder=3,
+                ha='center', va='center', fontsize=10, color=text_color, zorder=4,
                 bbox=dict(boxstyle='round,pad=0.3',
                           facecolor=face, edgecolor=edge, linewidth=elw))
 

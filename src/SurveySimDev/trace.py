@@ -12,6 +12,7 @@ import json
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 from matplotlib.colors import ListedColormap
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
@@ -377,7 +378,7 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False, sh
         is_visited = state in visited
         ax.text(
             x, y, label,
-            ha='center', va='center', fontsize=fontsize, zorder=3,
+            ha='center', va='center', fontsize=fontsize, zorder=4,
             bbox=dict(
                 boxstyle='round,pad=0.3',
                 facecolor=fsm_info.state_colors[state] if is_visited else 'white',
@@ -387,7 +388,7 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False, sh
         )
     xs = [p[0] for p in fsm_info.state_pos.values()]
     ys = [p[1] for p in fsm_info.state_pos.values()]
-    ax.set_xlim(min(xs) - 0.6, max(xs) + 0.5)
+    ax.set_xlim(min(xs) - 0.6, max(xs) + 1.5)
     ax.set_ylim(min(ys) - 0.6, max(ys) + 1.2)
     ax.axis('off')
 
@@ -397,13 +398,15 @@ def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png'):
     n_cols = 5
     n_rows = (n_star + n_cols - 1) // n_cols
 
-    fig_h = 4.0 + n_rows * 2.0
+    ys_fsm = [p[1] for p in fsm_info.state_pos.values()]
+    full_h = max(6.0, (max(ys_fsm) - min(ys_fsm)) * 1.5)
+    fig_h = full_h + n_rows * 2.5
     fig_w = max(13.0, n_cols * 2.2)
     fig = plt.figure(figsize=(fig_w, fig_h))
 
     gs = GridSpec(
         2, 1, figure=fig,
-        height_ratios=[4.0, n_rows * 2.0],
+        height_ratios=[full_h, n_rows * 2.5],
         hspace=0.3,
         top=0.95, bottom=0.02, left=0.01, right=0.99,
     )
@@ -445,11 +448,13 @@ def _edge_label(t):
 
 
 def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png'):
-    fig_w, fig_h = 13.0, 7.5
+    ys_fsm = [p[1] for p in fsm_info.state_pos.values()]
+    fsm_h = max(5.0, (max(ys_fsm) - min(ys_fsm)) * 1.5)
+    fig_w, fig_h = 13.0, fsm_h + 3.5
     fig = plt.figure(figsize=(fig_w, fig_h))
     gs = GridSpec(
         2, 1, figure=fig,
-        height_ratios=[5.0, 2.5],
+        height_ratios=[fsm_h, 2.5],
         hspace=0.25,
         top=0.93, bottom=0.04, left=0.02, right=0.98,
     )
@@ -619,9 +624,70 @@ def make_strip_plot(survey, fsm_info, save_path=ROOTDIR/'strip.png'):
     print(f"Saved to {save_path}")
 
 
+def _multipartite_pos(G, initial):
+    '''Assign longest-path-depth layers from initial state, return multipartite positions.'''
+    depths = {n: -1 for n in G.nodes()}
+    depths[initial] = 0
+    for node in nx.topological_sort(G):
+        if depths[node] < 0:
+            continue
+        for succ in G.successors(node):
+            if depths[node] + 1 > depths[succ]:
+                depths[succ] = depths[node] + 1
+    max_d = max(depths.values())
+    for node in G.nodes():
+        G.nodes[node]['layer'] = depths[node] if depths[node] >= 0 else max_d + 1
+    return nx.multipartite_layout(G, subset_key='layer', align='vertical')
+
+
+def _apply_nx_layout(fsm_info, layout):
+    '''Replace fsm_info.state_pos and edge_rad with a NetworkX-computed layout.
+
+    Positions are scaled to match _auto_pos coordinate range (x: 0..n_top_row-1,
+    y: 0..1.2) so that _draw_fsm's fixed shrink values remain correctly calibrated.
+    edge_rad is recomputed using bidirectional-arc logic: 0.25 when the reverse
+    edge (dst, src) also exists (separates opposing arrows), 0.0 otherwise.
+    '''
+    G = nx.DiGraph()
+    for t in fsm_info.transitions_full:
+        G.add_edge(t['src'], t['dst'])
+
+    if layout == 'multipartite':
+        raw_pos = _multipartite_pos(G, fsm_info.initial)
+        layer_counts = {}
+        for node in G.nodes():
+            layer_counts[G.nodes[node]['layer']] = layer_counts.get(G.nodes[node]['layer'], 0) + 1
+        n_max = max(layer_counts.values())
+        y_target = max(1.2, (n_max - 1) * 1.2)
+    else:
+        raw_pos = nx.kamada_kawai_layout(G)
+        y_target = 1.2
+
+    xs = [p[0] for p in raw_pos.values()]
+    ys = [p[1] for p in raw_pos.values()]
+    x_rng = max(xs) - min(xs) or 1.0
+    y_rng = max(ys) - min(ys) or 1.0
+    n_top = fsm_info._n_top_row
+    x_scale = (n_top - 1) / x_rng
+    y_scale = y_target / y_rng
+    fsm_info.state_pos = {
+        s: ((raw_pos[s][0] - min(xs)) * x_scale,
+            (raw_pos[s][1] - min(ys)) * y_scale)
+        for s in raw_pos
+    }
+
+    all_pairs = set(fsm_info.all_transitions)
+    fsm_info.edge_rad = {
+        (src, dst): (0.25 if (dst, src) in all_pairs else 0.0)
+        for src, dst in all_pairs
+    }
+
+
 def simulate_and_plot(args):
     survey = run_one(args.specs)
     fsm = FSMInfo(survey._specs)
+    if args.layout != 'auto':
+        _apply_nx_layout(fsm, args.layout)
     make_trace_plot(survey, fsm, save_path=args.output/'trace.png')
     make_transition_plot(survey, fsm, save_path=args.output/'transitions.png')
     make_machine_doc_plot(survey, fsm, save_path=args.output/'machine.png')
@@ -631,6 +697,9 @@ def main():
     parser = argparse.ArgumentParser(description='Plot survey simulation traces')
     parser.add_argument('--seed', type=int, default=None, metavar='SEED',
                         help='random seed (default: from specs, or 0)')
+    parser.add_argument('--layout', choices=['auto', 'multipartite', 'kk'],
+                        default='auto',
+                        help='FSM node layout (default: %(default)s; auto = hand-coded 2-row)')
     parser.add_argument('--output', default=ROOTDIR, metavar='DIR', type=Path,
                         help='output directory (default: %(default)s)')
     parser.add_argument('specs_file', metavar='SPECS',
