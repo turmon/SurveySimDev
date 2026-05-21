@@ -196,7 +196,6 @@ class StarInfo(StarInfoTreeMixin):
         self.promoted = True
 
     def forget_star(self, **kwargs):
-        # print(f"  Star {self.star_num:2d}: forgotten")
         self.eligible = False
 
     # --- callbacks auto-discovered by transitions
@@ -281,11 +280,6 @@ class SurveySimulation:
         if not star.promoted:
             return False
         # are we allowed to use the desired observing mode?
-        if star.star_num == 13 and star.promoted:
-            pass
-            # FIXME
-            #print("BREAK in Eligible")
-            #breakpoint()
         if star.state not in self.os.char_modes[mode]['uses']:
             return False
         return True
@@ -295,10 +289,8 @@ class SurveySimulation:
         for s in self.stars:
             for m in range(self.os.n_mode):
                 if self._char_eligible(s, m):
-                    #print(f">> Elig ({s.star_num}, {m})")
                     if self.os.calc_intTime(s.star_num, m) <= self.intCutoff:
                         char_cands.append((s, m))
-        # TODO print(f">> Got {len(char_cands)} chars")
         if char_cands:
             # rank by C/t
             best, mode = max(char_cands,
@@ -344,10 +336,7 @@ class SurveySimulation:
         if char_ok:
             spectrum, snr = self.os.compute_spectrum(mode, star.star_num)
             retrieval = self.sr.spectral_retrieval(mode, star.state, star.star_num, spectrum, snr)
-            #print(f"{star.star_num = } | {mode = }")
-            #print(retrieval)
         else:
-            #print("FAIL")
             retrieval = self.sr.null_retrieval(mode, star.state, star.star_num)
         # update star's internal state
         star.n_char[mode] += 1
