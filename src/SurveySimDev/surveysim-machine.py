@@ -248,7 +248,7 @@ def main():
         description='State-machine diagram using NetworkX layout')
     parser.add_argument('--output', default=ROOTDIR, metavar='DIR', type=Path,
                         help='output directory (default: %(default)s)')
-    parser.add_argument('--layout', choices=['multipartite', 'kk'], default='multipartite',
+    parser.add_argument('--layout', choices=['depth', 'kk'], default='depth',
                         help='layout algorithm (default: %(default)s)')
     parser.add_argument('--faint', default='', metavar='NODES',
                         help='comma-separated node names for visual de-emphasis; '
@@ -263,10 +263,10 @@ def main():
     fsm_info = FSMInfo(specs)
 
     G = _build_graph(fsm_info.transitions_full, faint=faint)
-    if args.layout == 'multipartite':
+    if args.layout == 'depth':
         raw_pos = _multipartite_pos(G, fsm_info.initial)
         fsm_info.state_pos = _scale_and_spread(raw_pos, uniform=False)
-        title = 'Survey Simulation Star-State Transitions\n(Multipartite/BFS-Depth Layout)'
+        title = 'Survey Simulation Star-State Transitions\n(Depth Layout)'
     else:
         raw_pos = nx.kamada_kawai_layout(G, weight='weight')
         fsm_info.state_pos = _scale_and_spread(raw_pos)

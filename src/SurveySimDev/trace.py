@@ -667,7 +667,7 @@ def _apply_nx_layout(fsm_info, layout):
     for t in fsm_info.transitions_full:
         G.add_edge(t['src'], t['dst'])
 
-    if layout == 'multipartite':
+    if layout == 'depth':
         raw_pos = _multipartite_pos(G, fsm_info.initial)
         layer_counts = {}
         for node in G.nodes():
@@ -713,7 +713,7 @@ def main():
     parser = argparse.ArgumentParser(description='Plot survey simulation traces')
     parser.add_argument('--seed', type=int, default=None, metavar='SEED',
                         help='random seed (default: from specs, or 0)')
-    parser.add_argument('--layout', choices=['auto', 'multipartite', 'kk'],
+    parser.add_argument('--layout', choices=['auto', 'depth', 'kk'],
                         default='auto',
                         help='FSM node layout (default: %(default)s; auto = hand-coded 2-row)')
     parser.add_argument('--faint', default='', metavar='NODES',
