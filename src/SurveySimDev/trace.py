@@ -288,7 +288,8 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png'):
     ax2.set_xticklabels([f"{DRM[k]['t'] / 365.25:.1f}" for k in tick_idx], fontsize=7)
     ax2.set_xlabel('Mission time (yr)', fontsize=9)
 
-    ax_main.set_title('Survey Trace', pad=22)
+    ax_main.set_title('Survey Simulation: Observing History',
+                      fontweight='bold', pad=22)
 
     # Grid lines between rows
     ax_main.set_yticks([y - 0.5 for y in range(n_star + 1)], minor=True)
@@ -426,7 +427,8 @@ def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png', 
     ax_full = fig.add_subplot(gs[0])
     _draw_fsm(ax_full, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
               fontsize=9, shrink=14, mini=False, shade=True, faint=faint)
-    ax_full.set_title('State Machine -- All Transitions', fontsize=12, pad=8)
+    ax_full.set_title('Survey Simulation State Machine\nTransition History by Star',
+                      fontweight='bold', fontsize=12, pad=8)
 
     # Per-star grid
     gs_stars = GridSpecFromSubplotSpec(
@@ -439,7 +441,8 @@ def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png', 
         # there is plenty of room to leave the title long
         # final = fsm_info.abbrev[survey.stars[i].state]
         final = survey.stars[i].state
-        ax.set_title(f'Star {i}\n[{final}]', fontsize=8, pad=1)
+        ax.set_title(f'Star {i}\n[{final}]',
+                     fontsize=8, fontweight='bold', pad=1)
 
     for i in range(n_star, n_rows * n_cols):
         ax = fig.add_subplot(gs_stars[i // n_cols, i % n_cols])
@@ -474,7 +477,8 @@ def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png', fai
     ax = fig.add_subplot(gs[0])
     _draw_fsm(ax, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
               fontsize=10, shrink=16, mini=False, shade=True, faint=faint)
-    ax.set_title('State Machine -- Triggers and Guard Conditions', fontsize=12, pad=8)
+    ax.set_title('Survey Simulation State Machine\nTriggers, Guard Conditions, Allowed Transitions',
+                 fontweight='bold', fontsize=12, pad=8)
 
     horiz_idx = 0
     diag_idx = 0
