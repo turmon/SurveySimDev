@@ -20,6 +20,8 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from trans import StarInfo, run_one
 
 ROOTDIR = Path('Media')
+_FAINT_COLOR = '#999999'
+_FAINT_LW = 0.8
 
 
 class FSMInfo:
@@ -349,24 +351,31 @@ def _star_visits(survey, star_idx):
     return visited, taken
 
 
-def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False, shade=False):
+def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False, shade=False,
+              faint=frozenset()):
     """Draw a state machine diagram; visited/taken control fill and arrow weight."""
     lw = 1.5 if mini else 2.0
     for src, dst in fsm_info.all_transitions:
         x0, y0 = fsm_info.state_pos[src]
         x1, y1 = fsm_info.state_pos[dst]
         is_taken = (src, dst) in taken
+        is_faint = dst in faint
         # Purely vertical arrows: shrink only along the box's narrow (height) axis,
         # so halve the shrink to match box half-height rather than half-width.
         s = max(2, shrink // 2) if x0 == x1 else shrink
-        if is_taken and shade:
+        if is_faint:
+            color = _FAINT_COLOR
+            edge_lw = _FAINT_LW
+        elif is_taken and shade:
             color = fsm_info.edge_shade[(src, dst)]
+            edge_lw = lw
         else:
             color = '#111' if is_taken else '#ddd'
+            edge_lw = lw if is_taken else 0.7
         ap = dict(
             arrowstyle='->',
             color=color,
-            lw=lw if is_taken else 0.7,
+            lw=edge_lw,
             shrinkA=s, shrinkB=s,
         )
         rad = fsm_info.edge_rad[(src, dst)]
@@ -376,14 +385,16 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False, sh
     for state, (x, y) in fsm_info.state_pos.items():
         label = fsm_info.abbrev[state] if mini else fsm_info.full_label[state]
         is_visited = state in visited
+        is_faint = state in faint
         ax.text(
             x, y, label,
             ha='center', va='center', fontsize=fontsize, zorder=4,
+            color=_FAINT_COLOR if is_faint else 'black',
             bbox=dict(
                 boxstyle='round,pad=0.3',
-                facecolor=fsm_info.state_colors[state] if is_visited else 'white',
-                edgecolor='#333' if is_visited else '#bbb',
-                linewidth=1.2 if is_visited else 0.5,
+                facecolor='white' if is_faint else (fsm_info.state_colors[state] if is_visited else 'white'),
+                edgecolor=_FAINT_COLOR if is_faint else ('#333' if is_visited else '#bbb'),
+                linewidth=_FAINT_LW if is_faint else (1.2 if is_visited else 0.5),
             ),
         )
     xs = [p[0] for p in fsm_info.state_pos.values()]
@@ -393,7 +404,7 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False, sh
     ax.axis('off')
 
 
-def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png'):
+def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png', faint=frozenset()):
     n_star = survey.su.n_star
     n_cols = 5
     n_rows = (n_star + n_cols - 1) // n_cols
@@ -414,7 +425,7 @@ def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png'):
     # Full machine
     ax_full = fig.add_subplot(gs[0])
     _draw_fsm(ax_full, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
-              fontsize=9, shrink=14, mini=False, shade=True)
+              fontsize=9, shrink=14, mini=False, shade=True, faint=faint)
     ax_full.set_title('State Machine -- All Transitions', fontsize=12, pad=8)
 
     # Per-star grid
@@ -424,7 +435,7 @@ def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png'):
     for i in range(n_star):
         ax = fig.add_subplot(gs_stars[i // n_cols, i % n_cols])
         visited, taken = _star_visits(survey, i)
-        _draw_fsm(ax, fsm_info, visited, taken, fontsize=5, shrink=4, mini=True)
+        _draw_fsm(ax, fsm_info, visited, taken, fontsize=5, shrink=4, mini=True, faint=faint)
         # there is plenty of room to leave the title long
         # final = fsm_info.abbrev[survey.stars[i].state]
         final = survey.stars[i].state
@@ -447,7 +458,7 @@ def _edge_label(t):
     return s
 
 
-def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png'):
+def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png', faint=frozenset()):
     ys_fsm = [p[1] for p in fsm_info.state_pos.values()]
     fsm_h = max(5.0, (max(ys_fsm) - min(ys_fsm)) * 1.5)
     fig_w, fig_h = 13.0, fsm_h + 3.5
@@ -462,7 +473,7 @@ def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png'):
     # --- Top panel: annotated machine diagram ---
     ax = fig.add_subplot(gs[0])
     _draw_fsm(ax, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
-              fontsize=10, shrink=16, mini=False, shade=True)
+              fontsize=10, shrink=16, mini=False, shade=True, faint=faint)
     ax.set_title('State Machine -- Triggers and Guard Conditions', fontsize=12, pad=8)
 
     horiz_idx = 0
@@ -472,6 +483,10 @@ def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png'):
         x1, y1 = fsm_info.state_pos[t['dst']]
         mx, my = (x0 + x1) / 2, (y0 + y1) / 2
         label = _edge_label(t)
+        is_faint = t['dst'] in faint
+        label_color = _FAINT_COLOR if is_faint else '#333'
+        label_fs = 5 if is_faint else 6
+        label_zorder = 2 if is_faint else 3
         if y0 == y1:
             # horizontal arrow; lift label to arc apex for curved (skip) edges
             rad = fsm_info.edge_rad[(t['src'], t['dst'])]
@@ -479,17 +494,17 @@ def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png'):
             y_off = 0.14 + 0.10 * (horiz_idx % 2)
             horiz_idx += 1
             ax.text(mx, my + arc_lift + y_off, label,
-                    ha='center', va='bottom', fontsize=6,
-                    color='#333', linespacing=1.3,
-                    bbox=dict(facecolor='white', edgecolor='none', pad=1))
+                    ha='center', va='bottom', fontsize=label_fs,
+                    color=label_color, linespacing=1.3, zorder=label_zorder,
+                    bbox=dict(facecolor='white', edgecolor='none', pad=1, alpha=0.70))
         else:
             # diagonal arrow -- stagger across three rows to reduce overplotting
             y_off = 0.13 * (diag_idx % 3) - 0.13
             diag_idx += 1
             ax.text(mx + 0.08, my + y_off, label,
-                    ha='left', va='center', fontsize=6,
-                    color='#333', linespacing=1.3,
-                    bbox=dict(facecolor='white', edgecolor='none', pad=1))
+                    ha='left', va='center', fontsize=label_fs,
+                    color=label_color, linespacing=1.3, zorder=label_zorder,
+                    bbox=dict(facecolor='white', edgecolor='none', pad=1, alpha=0.70))
 
     # --- Bottom panel: guard-condition docstring table ---
     ax_doc = fig.add_subplot(gs[1])
@@ -688,9 +703,10 @@ def simulate_and_plot(args):
     fsm = FSMInfo(survey._specs)
     if args.layout != 'auto':
         _apply_nx_layout(fsm, args.layout)
+    faint = args.faint
     make_trace_plot(survey, fsm, save_path=args.output/'trace.png')
-    make_transition_plot(survey, fsm, save_path=args.output/'transitions.png')
-    make_machine_doc_plot(survey, fsm, save_path=args.output/'machine.png')
+    make_transition_plot(survey, fsm, faint=faint, save_path=args.output/'transitions.png')
+    make_machine_doc_plot(survey, fsm, faint=faint, save_path=args.output/'machine.png')
     make_strip_plot(survey, fsm, save_path=args.output/'strip.png')
 
 def main():
@@ -700,6 +716,8 @@ def main():
     parser.add_argument('--layout', choices=['auto', 'multipartite', 'kk'],
                         default='auto',
                         help='FSM node layout (default: %(default)s; auto = hand-coded 2-row)')
+    parser.add_argument('--faint', default='', metavar='NODES',
+                        help='comma-separated node names to render faintly in FSM diagrams')
     parser.add_argument('--output', default=ROOTDIR, metavar='DIR', type=Path,
                         help='output directory (default: %(default)s)')
     parser.add_argument('specs_file', metavar='SPECS',
@@ -709,6 +727,7 @@ def main():
         args.specs = json.load(f)
     if args.seed is not None:
         args.specs['seed'] = args.seed
+    args.faint = set(args.faint.split(',')) - {''} if args.faint else set()
     args.output.mkdir(parents=True, exist_ok=True)
     simulate_and_plot(args)
     

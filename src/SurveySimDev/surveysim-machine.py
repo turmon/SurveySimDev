@@ -117,11 +117,11 @@ def _scale_and_spread(pos_in, uniform=True):
     return {s: (float(v[0]), float(v[1])) for s, v in pos.items()}
 
 
-def _build_graph(transitions_full, deemphasize=frozenset()):
+def _build_graph(transitions_full, faint=frozenset()):
     '''Build DiGraph for layout.
 
-    Edges touching a de-emphasized node get weight _DEEMPH_WEIGHT; all others
-    get weight 1.0.  KK uses weighted shortest-path distance as ideal spring
+    Edges touching a faint node get weight _DEEMPH_WEIGHT; all others get
+    weight 1.0.  KK uses weighted shortest-path distance as ideal spring
     length, so a high weight reduces that node's spring constants (k ~ 1/d^2)
     and pulls it toward the periphery without removing it from the layout.
     '''
@@ -129,7 +129,7 @@ def _build_graph(transitions_full, deemphasize=frozenset()):
     for t in transitions_full:
         src, dst = t['src'], t['dst']
         w = (_DEEMPH_WEIGHT
-             if (src in deemphasize or dst in deemphasize)
+             if (src in faint or dst in faint)
              else 1.0)
         G.add_edge(src, dst, weight=w)
     return G
@@ -173,7 +173,7 @@ def _assign_t_rads(transitions_full):
     return rads
 
 
-def _draw_machine(ax, fsm_info, t_rads, deemphasize=frozenset()):
+def _draw_machine(ax, fsm_info, t_rads, faint=frozenset()):
     '''Draw the FSM on ax: edges with labels, then nodes.'''
     pos = fsm_info.state_pos
     src_count = {}
@@ -183,7 +183,7 @@ def _draw_machine(ax, fsm_info, t_rads, deemphasize=frozenset()):
         x0, y0 = pos[src]
         x1, y1 = pos[dst]
 
-        if dst in deemphasize:
+        if dst in faint:
             color = _DEEMPH_EDGE_COLOR
             lw = _DEEMPH_EDGE_LW
             label_fs = 5
@@ -217,11 +217,11 @@ def _draw_machine(ax, fsm_info, t_rads, deemphasize=frozenset()):
         ly = my + label_offset * py
         ax.text(lx, ly, _edge_label(t),
                 ha='center', va='center', fontsize=label_fs,
-                color=color, linespacing=1.3, zorder=2 if dst in deemphasize else 3,
+                color=color, linespacing=1.3, zorder=2 if dst in faint else 3,
                 bbox=dict(facecolor='white', edgecolor='none', pad=1, alpha=0.70))
 
     for state, (x, y) in pos.items():
-        if state in deemphasize:
+        if state in faint:
             text_color = _DEEMPH_EDGE_COLOR
             face = 'white'
             edge = _DEEMPH_EDGE_COLOR
@@ -250,19 +250,19 @@ def main():
                         help='output directory (default: %(default)s)')
     parser.add_argument('--layout', choices=['multipartite', 'kk'], default='multipartite',
                         help='layout algorithm (default: %(default)s)')
-    parser.add_argument('--deemphasize', default='', metavar='NODES',
+    parser.add_argument('--faint', default='', metavar='NODES',
                         help='comma-separated node names for visual de-emphasis; '
                              'also weakens KK springs when --layout kk')
     parser.add_argument('specs_file', metavar='SPECS',
                         help='simulation parameters (JSON format)')
     args = parser.parse_args()
 
-    deemph = set(args.deemphasize.split(',')) - {''} if args.deemphasize else set()
+    faint = set(args.faint.split(',')) - {''} if args.faint else set()
 
     specs = json.loads(Path(args.specs_file).read_text())
     fsm_info = FSMInfo(specs)
 
-    G = _build_graph(fsm_info.transitions_full, deemphasize=deemph)
+    G = _build_graph(fsm_info.transitions_full, faint=faint)
     if args.layout == 'multipartite':
         raw_pos = _multipartite_pos(G, fsm_info.initial)
         fsm_info.state_pos = _scale_and_spread(raw_pos, uniform=False)
@@ -276,7 +276,7 @@ def main():
 
     fig, ax = plt.subplots(figsize=(13.0, 7.5))
     fig.subplots_adjust(top=0.93, bottom=0.04, left=0.02, right=0.98)
-    _draw_machine(ax, fsm_info, t_rads, deemphasize=deemph)
+    _draw_machine(ax, fsm_info, t_rads, faint=faint)
     ax.set_title(title, fontsize=12, pad=8)
 
     args.output.mkdir(parents=True, exist_ok=True)
