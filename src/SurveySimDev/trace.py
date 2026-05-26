@@ -52,7 +52,6 @@ class FSMInfo:
         self.full_label = {s: self._auto_label(s) for s in self.states}
         self.abbrev = self._make_abbrev()
         self.edge_rad = self._auto_edge_rad()
-        self.edge_shade = self._auto_edge_shade()
         self.success_state = self._top_row_term  # may be None
 
     def _normalize_transitions(self, raw):
@@ -186,19 +185,10 @@ class FSMInfo:
             rads[(src, dst)] = (0.25 if y0 == y1 and abs(x1 - x0) > 1.05 else 0.0)
         return rads
 
-    def _auto_edge_shade(self):
-        _SHADES = ['#111111', '#666666', '#aaaaaa']
-        shade = {}
-        src_count = {}
-        for src, dst in self.all_transitions:
-            n = src_count.get(src, 0)
-            shade[(src, dst)] = _SHADES[n % 3]
-            src_count[src] = n + 1
-        return shade
 
 
 
-def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png'):
+def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png', faint=frozenset()):
     n_star = survey.su.n_star
     DRM = survey.DRM
     n_obs = len(DRM)
@@ -215,7 +205,10 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png'):
         dtype=float,
     )
 
-    cmap = ListedColormap([fsm_info.state_colors[s] for s in fsm_info.states])
+    cmap = ListedColormap([
+        _FAINT_COLOR if s in faint else fsm_info.state_colors[s]
+        for s in fsm_info.states
+    ])
 
     # Figure size scales with data
     fig_w = max(14, n_obs * 0.08)
@@ -280,8 +273,9 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png'):
 
     # Legend
     state_patches = [
-        mpatches.Patch(facecolor=fsm_info.state_colors[s], edgecolor='#888',
-                       linewidth=0.5, label=s.replace('_', ' '))
+        mpatches.Patch(
+            facecolor=_FAINT_COLOR if s in faint else fsm_info.state_colors[s],
+            edgecolor='#888', linewidth=0.5, label=s.replace('_', ' '))
         for s in fsm_info.states
     ]
     dot_handles = [
@@ -337,7 +331,7 @@ def _star_visits(survey, star_idx):
     return visited, taken
 
 
-def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False, shade=False,
+def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False,
               faint=frozenset()):
     """Draw a state machine diagram; visited/taken control fill and arrow weight."""
     lw = 1.5 if mini else 2.0
@@ -352,11 +346,8 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False, sh
         if is_faint:
             color = _FAINT_COLOR
             edge_lw = _FAINT_LW
-        elif is_taken and shade:
-            color = fsm_info.edge_shade[(src, dst)]
-            edge_lw = lw
         else:
-            color = '#111' if is_taken else '#ddd'
+            color = '#111111' if is_taken else '#ddd'
             edge_lw = lw if is_taken else 0.7
         ap = dict(
             arrowstyle='->',
@@ -411,7 +402,7 @@ def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png', 
     # Full machine
     ax_full = fig.add_subplot(gs[0])
     _draw_fsm(ax_full, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
-              fontsize=9, shrink=14, mini=False, shade=True, faint=faint)
+              fontsize=9, shrink=14, mini=False, faint=faint)
     ax_full.set_title('Survey Simulation State Machine\nTransition History by Star',
                       fontweight='bold', fontsize=12, pad=8)
 
@@ -461,7 +452,7 @@ def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png', fai
     # --- Top panel: annotated machine diagram ---
     ax = fig.add_subplot(gs[0])
     _draw_fsm(ax, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
-              fontsize=10, shrink=16, mini=False, shade=True, faint=faint)
+              fontsize=10, shrink=16, mini=False, faint=faint)
     ax.set_title('Survey Simulation State Machine\nTriggers, Guard Conditions, Allowed Transitions',
                  fontweight='bold', fontsize=12, pad=8)
 
@@ -693,7 +684,7 @@ def simulate_and_plot(args):
     if args.layout != 'auto':
         _apply_nx_layout(fsm, args.layout)
     faint = args.faint
-    make_trace_plot(survey, fsm, save_path=args.output/'trace.png')
+    make_trace_plot(survey, fsm, faint=faint, save_path=args.output/'trace.png')
     make_transition_plot(survey, fsm, faint=faint, save_path=args.output/'transitions.png')
     make_machine_doc_plot(survey, fsm, faint=faint, save_path=args.output/'machine.png')
     make_strip_plot(survey, fsm, save_path=args.output/'strip.png')

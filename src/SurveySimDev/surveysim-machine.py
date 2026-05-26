@@ -19,7 +19,7 @@ import numpy as np
 from trace import FSMInfo  # local trace.py, not stdlib
 
 ROOTDIR = Path('Media')
-_SHADES = ['#111111', '#666666', '#aaaaaa']
+
 
 # Figure/axis geometry -- must match subplots_adjust call in main().
 _FIG_W, _FIG_H = 13.0, 7.5
@@ -176,7 +176,6 @@ def _assign_t_rads(transitions_full):
 def _draw_machine(ax, fsm_info, t_rads, faint=frozenset()):
     '''Draw the FSM on ax: edges with labels, then nodes.'''
     pos = fsm_info.state_pos
-    src_count = {}
 
     for t, rad in zip(fsm_info.transitions_full, t_rads):
         src, dst = t['src'], t['dst']
@@ -188,9 +187,7 @@ def _draw_machine(ax, fsm_info, t_rads, faint=frozenset()):
             lw = _DEEMPH_EDGE_LW
             label_fs = 5
         else:
-            n = src_count.get(src, 0)
-            color = _SHADES[n % len(_SHADES)]
-            src_count[src] = n + 1
+            color = '#111111'
             lw = 2.0
             label_fs = 6
 
