@@ -51,7 +51,6 @@ class FSMInfo:
         self.state_colors = self._auto_colors()
         self.full_label = {s: self._auto_label(s) for s in self.states}
         self.abbrev = self._make_abbrev()
-        self.dot_styles = self._auto_dot_styles(specs.get('observingModes', []))
         self.edge_rad = self._auto_edge_rad()
         self.edge_shade = self._auto_edge_shade()
         self.success_state = self._top_row_term  # may be None
@@ -197,20 +196,6 @@ class FSMInfo:
             src_count[src] = n + 1
         return shade
 
-    def _auto_dot_styles(self, observing_modes):
-        _CHAR_COLORS = ['#2ca02c', '#9e9ac8', '#fc8d59', '#e7ba52', '#6baed6']
-        styles = {
-            (-1, True):  ('#1f77b4', 'Det: Success'),
-            (-1, False): ('black',   'Det: Fail'),
-        }
-        char_modes = [m for m in observing_modes if not m.get('detection', True)]
-        for i, mode in enumerate(char_modes):
-            m = mode['mode_num']
-            color = _CHAR_COLORS[i % len(_CHAR_COLORS)]
-            lam = mode.get('lam', '?')
-            styles[(m, True)]  = (color, f'Char {lam}nm: Success')
-            styles[(m, False)] = ('#d62728', f'Char {lam}nm: Fail')
-        return styles
 
 
 def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png'):
@@ -258,9 +243,7 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png'):
             ax_main.axvline(k, color='#888888', linewidth=0.6,
                             linestyle=':', alpha=0.7, zorder=2)
         else:
-            color, _ = fsm_info.dot_styles.get(
-                (obs['mode'], obs['success']),
-                fsm_info.dot_styles.get((0, obs['success']), ('#999999', '')))
+            color = '#2ca02c' if obs['success'] else '#d62728'
             ax_main.plot(
                 k, obs['star_num'], 'o',
                 color=color, markersize=4,
@@ -303,9 +286,11 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png'):
     ]
     dot_handles = [
         plt.Line2D([0], [0], marker='o', linestyle='none',
-                   markerfacecolor=c, markeredgecolor='white',
-                   markeredgewidth=0.3, markersize=5, label=lbl)
-        for (_, __), (c, lbl) in fsm_info.dot_styles.items()
+                   markerfacecolor='#2ca02c', markeredgecolor='white',
+                   markeredgewidth=0.3, markersize=5, label='Success'),
+        plt.Line2D([0], [0], marker='o', linestyle='none',
+                   markerfacecolor='#d62728', markeredgecolor='white',
+                   markeredgewidth=0.3, markersize=5, label='Fail'),
     ]
     ax_main.legend(
         handles=state_patches + dot_handles,
