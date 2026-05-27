@@ -687,15 +687,19 @@ def _apply_nx_layout(fsm_info, layout):
 
 
 def simulate_and_plot(args):
+    # run a simulation
     survey = run_one(args.specs)
+    # get the layout of the FSM
     fsm = FSMInfo(survey._specs)
     if args.layout != 'auto':
         _apply_nx_layout(fsm, args.layout)
+    # make all plots
     faint = args.faint
     make_trace_plot(survey, fsm, faint=faint, save_path=args.output/'trace.png')
     make_transition_plot(survey, fsm, faint=faint, save_path=args.output/'transitions.png')
     make_machine_doc_plot(survey, fsm, faint=faint, save_path=args.output/'machine.png')
     make_strip_plot(survey, fsm, faint=faint, save_path=args.output/'strip.png')
+
 
 def main():
     parser = argparse.ArgumentParser(description='Plot survey simulation traces')
