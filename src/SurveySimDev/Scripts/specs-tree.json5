@@ -45,43 +45,43 @@
     { "trigger": "process_det",  "source": "unobserved", "dest": "orbit_det", "conditions": "det_exists" },
     { "trigger": "process_det",  "source": "observing",  "dest": "orbit_det", "conditions": "det_exists" },
     { "trigger": "process_det",  "source": "observing",  "dest": "retired",   "conditions": "det_exhausted",  "after": "forget_star" },
-    { "trigger": "process_det",  "source": "orbit_det",  "dest": "char_vi1", "conditions": ["has_orbit_count",
-									 		      "has_orbit_span"], "after": "promote_star" },
+    { "trigger": "process_det",  "source": "orbit_det",  "dest": "char_vi1",  "conditions": ["has_orbit_count",
+									 		     "has_orbit_span"], "after": "promote_star" },
     { "trigger": "process_det",  "source": "orbit_det",   "dest": "retired",  "conditions": "orbit_exhausted", "after": "forget_star" },
     // VIS, Node vis1, H2O/CH4 ("visw")
     { "trigger": "process_char", "source": "char_vi1", "dest": "dead_rocky", "conditions": "sr_H2O_no",    "after": "forget_star"  },
-    { "trigger": "process_char", "source": "char_vi1", "dest": "char_ir3",  "conditions": "sr_H2O_yes_CH4_yes" },
-    { "trigger": "process_char", "source": "char_vi1", "dest": "char_vi2",  "conditions": "sr_H2O_yes" },
+    { "trigger": "process_char", "source": "char_vi1", "dest": "char_ir3",   "conditions": "sr_H2O_yes_CH4_yes" },
+    { "trigger": "process_char", "source": "char_vi1", "dest": "char_vi2",   "conditions": "sr_H2O_yes" },
     { "trigger": "process_char", "source": "char_vi1", "dest": "retired",    "conditions": "char_exhausted",   "after": "forget_star" },
     // VIS, Node vis2, O2 ("viso")
     { "trigger": "process_char", "source": "char_vi2",  "dest": "dead_rocky","conditions": "sr_O2_high",   "after": "forget_star"  },
-    { "trigger": "process_char", "source": "char_vi2",  "dest": "char_ir1", "conditions": "sr_O2_medium" },
-    { "trigger": "process_char", "source": "char_vi2",  "dest": "char_ir2", "conditions": "sr_O2_no" },
-    { "trigger": "process_char", "source": "char_vi2",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_vi2",  "dest": "char_ir1",  "conditions": "sr_O2_medium" },
+    { "trigger": "process_char", "source": "char_vi2",  "dest": "char_ir2",  "conditions": "sr_O2_no" },
+    { "trigger": "process_char", "source": "char_vi2",  "dest": "partial",   "conditions": "char_exhausted",   "after": "forget_star" },
     // NIR, Node nir1, CH4/CO2 ("nir")
-    { "trigger": "process_char", "source": "char_ir1",  "dest": "char_uv1", "conditions": "sr_CH4_no" },
+    { "trigger": "process_char", "source": "char_ir1",  "dest": "char_uv1",  "conditions": "sr_CH4_no" },
     { "trigger": "process_char", "source": "char_ir1",  "dest": "modern",    "conditions": "sr_CH4_yes" },
-    { "trigger": "process_char", "source": "char_ir1",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_ir1",  "dest": "partial",   "conditions": "char_exhausted",   "after": "forget_star" },
     // NIR, Node nir2, CH4/CO2 ("nir")
-    { "trigger": "process_char", "source": "char_ir2",  "dest": "char_uv3", "conditions": "sr_CH4_yes_CO2_yes" }, // right branch
-    { "trigger": "process_char", "source": "char_ir2",  "dest": "char_uv2", "conditions": "sr_ok" },    // left branch ("else")
-    { "trigger": "process_char", "source": "char_ir2",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_ir2",  "dest": "char_uv3",  "conditions": "sr_CH4_yes_CO2_yes" }, // right branch
+    { "trigger": "process_char", "source": "char_ir2",  "dest": "char_uv2",  "conditions": "sr_ok" },    // left branch ("else")
+    { "trigger": "process_char", "source": "char_ir2",  "dest": "partial",   "conditions": "char_exhausted",   "after": "forget_star" },
     // NIR, Node nir3, CO2  ("nir")
-    { "trigger": "process_char", "source": "char_ir3",  "dest": "ambiguous", "conditions": "sr_CO2_no",     "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_ir3",  "dest": "archean",   "conditions": "sr_CO2_yes",    "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_ir3",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_ir3",  "dest": "ambiguous", "conditions": "sr_CO2_no",      "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_ir3",  "dest": "archean",   "conditions": "sr_CO2_yes",     "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_ir3",  "dest": "partial",   "conditions": "char_exhausted", "after": "forget_star" },
     // NUV, Node nuv1, pressure ("nuv")
-    { "trigger": "process_char", "source": "char_uv1",  "dest": "ambiguous", "conditions": "sr_press_low",  "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_uv1",  "dest": "modern",    "conditions": "sr_press_high", "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_uv1",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv1",  "dest": "ambiguous", "conditions": "sr_press_low",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv1",  "dest": "modern",    "conditions": "sr_press_high",  "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv1",  "dest": "partial",   "conditions": "char_exhausted", "after": "forget_star" },
     // NUV, Node nuv2, O3 ("nuv")
-    { "trigger": "process_char", "source": "char_uv2",  "dest": "proterozoic","conditions":"sr_press_low",  "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_uv2",  "dest": "ambiguous", "conditions": "sr_press_high", "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_uv2",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv2",  "dest": "proterozoic","conditions":"sr_press_low",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv2",  "dest": "ambiguous", "conditions": "sr_press_high",  "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv2",  "dest": "partial",   "conditions": "char_exhausted", "after": "forget_star" },
     // NUV, Node nuv3, O3 ("nuv")
-    { "trigger": "process_char", "source": "char_uv3",  "dest": "archean",   "conditions": "sr_O3_no",      "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_uv3",  "dest": "proterozoic","conditions":"sr_O3_yes",     "after": "forget_star" },
-    { "trigger": "process_char", "source": "char_uv3",  "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv3",  "dest": "archean",   "conditions": "sr_O3_no",       "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv3",  "dest": "proterozoic","conditions":"sr_O3_yes",      "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv3",  "dest": "partial",   "conditions": "char_exhausted", "after": "forget_star" },
     // sweep up
     { "trigger": "end_mission",  "source": ["char_vi2",
 					    "char_ir1", "char_ir2", "char_ir3",
