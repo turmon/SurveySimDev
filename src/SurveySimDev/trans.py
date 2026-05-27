@@ -352,22 +352,18 @@ class SurveySimulation:
         return drm
 
     def observation_advance(self):
-        active = [s for s in self.stars if s.eligible]
-        if not active:
-            return False
         t0 = self.tk.current_time
+        active = [s for s in self.stars if s.eligible]
         blocked = [s for s in active
                    if s.t_det_attempt is not None
-                   and t0 - s.t_det_attempt < self.revisit_wait]
-        if not blocked:
-            return None
-        next_open = min(s.t_det_attempt + self.revisit_wait for s in blocked)
+                   and t0 - s.t_det_attempt < self.revisit_wait] if active else []
+        if blocked:
+            next_open = min(s.t_det_attempt + self.revisit_wait for s in blocked)
+        else:
+            next_open = self.tk.missionLife + 1e-9
         dt = next_open - t0
         self.tk.allocate(dt)
-        drm = {'star_num': None, 'mode': None,
-                         'success': True, 't': t0,
-                         'int_time': dt}
-        return drm
+        return {'star_num': None, 'mode': None, 'success': True, 't': t0, 'int_time': dt}
 
     def run_sim(self):
         n = self.su.n_star
@@ -384,8 +380,6 @@ class SurveySimulation:
             # 3/ execute observation or time-advance
             if mode is None:
                 drm = self.observation_advance()
-                if not drm:
-                    break # nothing more to do
             elif mode == -1:
                 drm = self.observation_detection(star)
             elif mode >= 0:
