@@ -18,6 +18,19 @@
   "state_initial": {
     "*": "unobserved"
   },
+  "state_properties": {
+    "unobserved": {"mode": -1},
+    "observing": {"mode": -1},
+    "orbit_det": {"mode": -1},
+    "char_vis": {"mode": 0},
+    "char_nuv": {"mode": 1},
+    "char_nir": {"mode": 2},
+    "found": {"terminal": true},
+    "partial": {"terminal": true},
+    "retired": {"terminal": true},
+    "unknown": {"terminal": true},  // consider leaving one out as a demo
+    "success": {"success": 1},
+  },
   "state_transitions": [
     { "trigger": "process_det",  "source": "unobserved", "dest": "observing", "unless": "det_exists" },
     { "trigger": "process_det",  "source": "unobserved", "dest": "orbit_det", "conditions": "det_exists" },
@@ -49,7 +62,6 @@
     {
       "instName": "imaging_BroadbandVisible_500",
       "systName": "VVC500",
-      "uses": [],
       "mode_num": -1,
       "int_factor_x": 1.0,
       "comp_bound_x": 0.1,
@@ -60,9 +72,6 @@
     {
       "instName": "spectro910_R70_EMCCD",
       "systName": "VVC575",
-      "uses": [
-        "char_vis"
-      ],
       "mode_num": 0,
       "int_factor_x": 1.2,
       "comp_bound_x": 0.8,
@@ -73,9 +82,6 @@
     {
       "instName": "spectro_NUV310_EMCCD",
       "systName": "VVC575",
-      "uses": [
-        "char_nuv"
-      ],
       "mode_num": 1,
       "int_factor_x": 1.0,
       "comp_bound_x": 0.9,
@@ -86,9 +92,6 @@
     {
       "instName": "spectro1500_R40_EMCCD",
       "systName": "VVC575",
-      "uses": [
-        "char_nir"
-      ],
       "mode_num": 2,
       "int_factor_x": 2.0,
       "comp_bound_x": 0.5,

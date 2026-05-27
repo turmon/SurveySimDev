@@ -60,6 +60,8 @@ class FSMInfo:
         self.abbrev = self._make_abbrev()
         self.edge_rad = self._auto_edge_rad()
         self.success_state = self._top_row_term  # may be None
+        _srcs = {t['src'] for t in self.transitions_full}
+        self.terminal_states = frozenset(s for s in self.states if s not in _srcs)
 
     def _normalize_transitions(self, raw):
         result = []
@@ -302,6 +304,8 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png', faint=froze
     # --- Side panel: earths indicator ---
     for i in range(n_star):
         n = int(earths[i])
+        final = survey.stars[i].state
+        success_val = survey.state_props[final].success
         if n > 0:
             sat = min(0.4 + 0.3 * (n - 1), 1.0)   # 0.4 -> 0.7 -> 1.0
             val = max(0.5, 0.9 - 0.2 * (n - 1))    # 0.9 -> 0.7 -> 0.5
@@ -310,13 +314,16 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png', faint=froze
                 mpatches.Rectangle((0, i - 0.5), 1, 1,
                                    facecolor=color, edgecolor='none')
             )
-            final = survey.stars[i].state
-            if final == 'partial':
-                ax_side.plot(0.5, i, 'P', color='black',
-                             markersize=5, zorder=4)
-            elif final != fsm_info.success_state:
+        if success_val == 1:
+            ax_side.plot(0.5, i, '+', color='#006400',
+                         markersize=9, markeredgewidth=2.5, zorder=4)
+        elif n > 0:
+            if success_val == 0:
                 ax_side.plot(0.5, i, 'x', color='red',
                              markersize=7, markeredgewidth=1.5, zorder=4)
+            elif success_val == -1:
+                ax_side.plot(0.5, i, '+', color='black',
+                             markersize=9, markeredgewidth=2.5, zorder=4)
 
     ax_side.set_xlim(0, 1)
     ax_side.set_ylim(n_star - 0.5, -0.5)   # inverted to match imshow
@@ -370,6 +377,7 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False,
         label = fsm_info.abbrev[state] if mini else fsm_info.full_label[state]
         is_visited = state in visited
         is_faint = state in faint
+        is_terminal = state in fsm_info.terminal_states
         ax.text(
             x, y, label,
             ha='center', va='center', fontsize=fontsize, zorder=4,
@@ -378,7 +386,7 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False,
                 boxstyle='round,pad=0.3',
                 facecolor='white' if is_faint else (fsm_info.state_colors[state] if is_visited else 'white'),
                 edgecolor=_FAINT_COLOR if is_faint else ('#333' if is_visited else '#bbb'),
-                linewidth=_FAINT_LW if is_faint else (1.2 if is_visited else 0.5),
+                linewidth=_FAINT_LW if is_faint else (2.2 if is_terminal else (1.2 if is_visited else 0.5)),
             ),
         )
     xs = [p[0] for p in fsm_info.state_pos.values()]

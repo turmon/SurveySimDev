@@ -3,10 +3,18 @@
 '''
 
 import argparse
+from dataclasses import dataclass, field
 import json
 import numpy as np
 from transitions import Machine
 from StarInfoTree import StarInfoTreeMixin
+
+
+@dataclass
+class StateProps:
+    mode: list = field(default_factory=list)
+    terminal: bool = False
+    success: int = 0
 
 
 def _states_from_transitions(transitions):
@@ -232,6 +240,7 @@ class SurveySimulation:
         self.n_det_remove  = specs['n_det_remove']
         self.n_char_remove = specs['n_char_remove']
         self._specs = specs
+        self.state_props = self._normalize_state_props(specs)
         self.rng = sim_universe.rng
         self.state_history = []   # one n_star state-vector per observation
         self.DRM = []             # one record per observation
@@ -248,6 +257,23 @@ class SurveySimulation:
             for i in range(sim_universe.n_star)
         ]
         self._build_machines()
+
+    @staticmethod
+    def _normalize_state_props(specs):
+        states = _states_from_transitions(specs['state_transitions'])
+        raw = specs.get('state_properties', {})
+        result = {}
+        for state in states:
+            entry = raw.get(state, {})
+            m = entry.get('mode', [])
+            if isinstance(m, int):
+                m = [m]
+            result[state] = StateProps(
+                mode=m,
+                terminal=entry.get('terminal', False),
+                success=int(entry.get('success', 0)),
+            )
+        return result
 
     def _build_machines(self):
         transitions = self._specs['state_transitions']
@@ -274,26 +300,23 @@ class SurveySimulation:
         else:
             return self.TimeKeeping.current_time - star.t_det_attempt >= self.revisit_wait
 
-    def _char_eligible(self, star, mode):
-        if star.eligible == False:
+    def _char_eligible(self, star):
+        if not star.eligible:
             return False
         if not star.promoted:
             return False
-        # are we allowed to use the desired observing mode?
-        if star.state not in self.OpticalSystem.char_modes[mode]['uses']:
-            return False
-        return True
+        return any(m >= 0 for m in self.state_props[star.state].mode)
 
     def next_target(self):
-        char_cands = []
-        for s in self.stars:
-            for m in range(self.OpticalSystem.n_mode):
-                if self._char_eligible(s, m):
-                    if self.OpticalSystem.calc_intTime(s.star_num, m) <= self.intCutoff:
-                        char_cands.append((s, m))
-        if char_cands:
+        char_mode_cands = [] # (s,m) pairs
+        char_initial_cands = [s for s in self.stars if self._char_eligible(s)]
+        for s in char_initial_cands:
+            for m in self.state_props[s.state].mode:
+                if self.OpticalSystem.calc_intTime(s.star_num, m) <= self.intCutoff:
+                    char_mode_cands.append((s, m))
+        if char_mode_cands:
             # rank by C/t
-            best, mode = max(char_cands,
+            best, mode = max(char_mode_cands,
                              key=lambda sm: self.SimulatedUniverse.char_comp[sm[0].star_num, sm[1]] / self.OpticalSystem.calc_intTime(sm[0].star_num, sm[1]))
             return best, mode
 
@@ -397,14 +420,15 @@ class SurveySimulation:
         self._print_summary()
 
     def _print_summary(self):
-        n_mode = self.OpticalSystem.n_mode
+        OS = self.OpticalSystem
+        n_mode = OS.n_mode
         mode_labels = []
+        # (no short semantic tags for ObservingModes -- maybe add them)
         for m in range(n_mode):
-            uses = self.OpticalSystem.char_modes[m].get('uses', [])
-            lbl = uses[0].replace('char_', '') if uses else f'M#{m}'
+            lbl = f'[{OS.char_modes[m]["lam"]}]'
             mode_labels.append(lbl)
         sep = '  '
-        col_w = 5
+        col_w = 6
         mode_w = n_mode * col_w + (n_mode - 1) * len(sep)
         lbl_row = sep.join(f'{lbl:>{col_w}}' for lbl in mode_labels)
         fixed0 = f"{'':>4}  {'':>5}  {'':>6}  {'':>5}  {'':>8}"
