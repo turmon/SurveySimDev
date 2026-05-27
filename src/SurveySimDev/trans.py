@@ -137,7 +137,7 @@ class StarInfo(StarInfoTreeMixin):
     n_mode = None
     def __init__(self, star_num, earths, gap_required, n_det_remove, n_char_remove):
         if not self.n_mode:
-            RuntimeError('StarInfo needs its n_mode set')
+            raise RuntimeError('StarInfo needs its n_mode set')
         self.star_num = star_num
         self.earths = earths
         self.gap_required = gap_required
