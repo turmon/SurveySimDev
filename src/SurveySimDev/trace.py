@@ -20,8 +20,10 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from trans import StarInfo, run_one
 
 ROOTDIR = Path('Media')
-_FAINT_COLOR = '#999999'
-_FAINT_LW = 0.8
+_FAINT_COLOR    = '#999999'
+_FAINT_LW       = 0.8
+_SUCCESS_COLOR  = '#2ca02c'
+_FAIL_COLOR     = '#d62728'
 
 
 class FSMInfo:
@@ -236,7 +238,7 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png', faint=froze
             ax_main.axvline(k, color='#888888', linewidth=0.6,
                             linestyle=':', alpha=0.7, zorder=2)
         else:
-            color = '#2ca02c' if obs['success'] else '#d62728'
+            color = _SUCCESS_COLOR if obs['success'] else _FAIL_COLOR
             ax_main.plot(
                 k, obs['star_num'], 'o',
                 color=color, markersize=4,
@@ -280,10 +282,10 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png', faint=froze
     ]
     dot_handles = [
         plt.Line2D([0], [0], marker='o', linestyle='none',
-                   markerfacecolor='#2ca02c', markeredgecolor='white',
+                   markerfacecolor=_SUCCESS_COLOR, markeredgecolor='white',
                    markeredgewidth=0.3, markersize=5, label='Success'),
         plt.Line2D([0], [0], marker='o', linestyle='none',
-                   markerfacecolor='#d62728', markeredgecolor='white',
+                   markerfacecolor=_FAIL_COLOR, markeredgecolor='white',
                    markeredgewidth=0.3, markersize=5, label='Fail'),
     ]
     ax_main.legend(
@@ -518,7 +520,7 @@ def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png', fai
     print(f"Saved to {save_path}")
 
 
-def make_strip_plot(survey, fsm_info, save_path=ROOTDIR/'strip.png'):
+def make_strip_plot(survey, fsm_info, save_path=ROOTDIR/'strip.png', faint=frozenset()):
     DRM = survey.DRM
     if not DRM:
         print("No observations recorded.")
@@ -547,7 +549,7 @@ def make_strip_plot(survey, fsm_info, save_path=ROOTDIR/'strip.png'):
             color = ADVANCE_COLOR
         else:
             state = survey.state_history[k][obs['star_num']]
-            color = fsm_info.state_colors[state]
+            color = _FAINT_COLOR if state in faint else fsm_info.state_colors[state]
 
         # Categorical y-position; label index for above/below alternation
         if obs['mode'] is None:
@@ -576,7 +578,7 @@ def make_strip_plot(survey, fsm_info, save_path=ROOTDIR/'strip.png'):
             # Success/fail dot -- only for non-delay entries, only in the year
             # containing the temporal midpoint of the full (un-clipped) bar
             if obs['mode'] is not None and yr_t0 <= t_mid < yr_t1:
-                dot_color = '#2ca02c' if obs['success'] else '#d62728'
+                dot_color = _SUCCESS_COLOR if obs['success'] else _FAIL_COLOR
                 axes[yr].plot(t_mid - yr_t0, y_cat, 'o',
                               color=dot_color, markersize=3.75, zorder=3,
                               markeredgecolor='black', markeredgewidth=0.5)
@@ -600,15 +602,16 @@ def make_strip_plot(survey, fsm_info, save_path=ROOTDIR/'strip.png'):
 
     # Legend on last panel, lower left
     state_patches = [
-        mpatches.Patch(facecolor=fsm_info.state_colors[s], alpha=0.7, edgecolor='none',
-                       label=s.replace('_', ' '))
+        mpatches.Patch(
+            facecolor=_FAINT_COLOR if s in faint else fsm_info.state_colors[s],
+            alpha=0.7, edgecolor='none', label=s.replace('_', ' '))
         for s in fsm_info.states
     ]
     dot_handles = [
         plt.Line2D([0], [0], marker='o', linestyle='none',
-                   color='#2ca02c', markersize=5, label='Success'),
+                   color=_SUCCESS_COLOR, markersize=5, label='Success'),
         plt.Line2D([0], [0], marker='o', linestyle='none',
-                   color='#d62728', markersize=5, label='Fail'),
+                   color=_FAIL_COLOR, markersize=5, label='Fail'),
     ]
     axes[-1].legend(handles=state_patches + dot_handles,
                     loc='lower left', fontsize=7, ncol=2,
@@ -687,7 +690,7 @@ def simulate_and_plot(args):
     make_trace_plot(survey, fsm, faint=faint, save_path=args.output/'trace.png')
     make_transition_plot(survey, fsm, faint=faint, save_path=args.output/'transitions.png')
     make_machine_doc_plot(survey, fsm, faint=faint, save_path=args.output/'machine.png')
-    make_strip_plot(survey, fsm, save_path=args.output/'strip.png')
+    make_strip_plot(survey, fsm, faint=faint, save_path=args.output/'strip.png')
 
 def main():
     parser = argparse.ArgumentParser(description='Plot survey simulation traces')
