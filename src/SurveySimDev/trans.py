@@ -222,10 +222,10 @@ class StarInfo(StarInfoTreeMixin):
 
 class SurveySimulation:
     def __init__(self, time_keeping, sim_universe, optical_system, spectral_retrieval, specs):
-        self.tk = time_keeping
-        self.su = sim_universe
-        self.os = optical_system
-        self.sr = spectral_retrieval
+        self.TimeKeeping = time_keeping
+        self.SimulatedUniverse = sim_universe
+        self.OpticalSystem = optical_system
+        self.SpectralRetrieval = spectral_retrieval
         self.revisit_wait  = specs['revisit_wait']
         self.gap_required  = specs['gap_required']
         self.intCutoff       = specs['intCutoff']
@@ -236,7 +236,7 @@ class SurveySimulation:
         self.state_history = []   # one n_star state-vector per observation
         self.DRM = []             # one record per observation
         # set up the class (globally)
-        StarInfo.n_mode = self.os.n_mode
+        StarInfo.n_mode = self.OpticalSystem.n_mode
         self.stars = [
             StarInfo(
                 star_num=i,
@@ -272,7 +272,7 @@ class SurveySimulation:
         if star.t_det_attempt is None:
             return True
         else:
-            return self.tk.current_time - star.t_det_attempt >= self.revisit_wait
+            return self.TimeKeeping.current_time - star.t_det_attempt >= self.revisit_wait
 
     def _char_eligible(self, star, mode):
         if star.eligible == False:
@@ -280,37 +280,37 @@ class SurveySimulation:
         if not star.promoted:
             return False
         # are we allowed to use the desired observing mode?
-        if star.state not in self.os.char_modes[mode]['uses']:
+        if star.state not in self.OpticalSystem.char_modes[mode]['uses']:
             return False
         return True
 
     def next_target(self):
         char_cands = []
         for s in self.stars:
-            for m in range(self.os.n_mode):
+            for m in range(self.OpticalSystem.n_mode):
                 if self._char_eligible(s, m):
-                    if self.os.calc_intTime(s.star_num, m) <= self.intCutoff:
+                    if self.OpticalSystem.calc_intTime(s.star_num, m) <= self.intCutoff:
                         char_cands.append((s, m))
         if char_cands:
             # rank by C/t
             best, mode = max(char_cands,
-                             key=lambda sm: self.su.char_comp[sm[0].star_num, sm[1]] / self.os.calc_intTime(sm[0].star_num, sm[1]))
+                             key=lambda sm: self.SimulatedUniverse.char_comp[sm[0].star_num, sm[1]] / self.OpticalSystem.calc_intTime(sm[0].star_num, sm[1]))
             return best, mode
 
         det_cands = [s for s in self.stars if self._det_eligible(s)]
         if det_cands:
             best = max(det_cands,
-                       key=lambda s: self.su.det_comp[s.star_num] / self.os.calc_intTime(s.star_num))
+                       key=lambda s: self.SimulatedUniverse.det_comp[s.star_num] / self.OpticalSystem.calc_intTime(s.star_num))
             return best, -1
         # no targets
         return None, None
 
     def observation_detection(self, star):
         # perform integration
-        t0 = self.tk.current_time
-        int_time = self.os.calc_intTime(star.star_num)
-        self.tk.allocate(int_time)
-        det_ok = bool(np.any(self.rng.random(size=(star.earths,)) < self.su.det_comp[star.star_num]))
+        t0 = self.TimeKeeping.current_time
+        int_time = self.OpticalSystem.calc_intTime(star.star_num)
+        self.TimeKeeping.allocate(int_time)
+        det_ok = bool(np.any(self.rng.random(size=(star.earths,)) < self.SimulatedUniverse.det_comp[star.star_num]))
         # update state
         star.n_det += 1
         star.t_det_attempt = t0
@@ -329,15 +329,15 @@ class SurveySimulation:
 
     def observation_characterization(self, star, mode):
         # perform integration
-        t0 = self.tk.current_time
-        int_time = self.os.calc_intTime(star.star_num, mode)
-        self.tk.allocate(int_time)
-        char_ok = bool(np.any(self.rng.random(size=(star.earths,)) < self.su.char_comp[star.star_num, mode]))
+        t0 = self.TimeKeeping.current_time
+        int_time = self.OpticalSystem.calc_intTime(star.star_num, mode)
+        self.TimeKeeping.allocate(int_time)
+        char_ok = bool(np.any(self.rng.random(size=(star.earths,)) < self.SimulatedUniverse.char_comp[star.star_num, mode]))
         if char_ok:
-            spectrum, snr = self.os.compute_spectrum(mode, star.star_num)
-            retrieval = self.sr.spectral_retrieval(mode, star.state, star.star_num, spectrum, snr)
+            spectrum, snr = self.OpticalSystem.compute_spectrum(mode, star.star_num)
+            retrieval = self.SpectralRetrieval.spectral_retrieval(mode, star.state, star.star_num, spectrum, snr)
         else:
-            retrieval = self.sr.null_retrieval(mode, star.state, star.star_num)
+            retrieval = self.SpectralRetrieval.null_retrieval(mode, star.state, star.star_num)
         # update star's internal state
         star.n_char[mode] += 1
         if char_ok:
@@ -352,7 +352,7 @@ class SurveySimulation:
         return drm
 
     def observation_advance(self):
-        t0 = self.tk.current_time
+        t0 = self.TimeKeeping.current_time
         active = [s for s in self.stars if s.eligible]
         blocked = [s for s in active
                    if s.t_det_attempt is not None
@@ -360,16 +360,16 @@ class SurveySimulation:
         if blocked:
             next_open = min(s.t_det_attempt + self.revisit_wait for s in blocked)
         else:
-            next_open = self.tk.missionLife + 1e-9
+            next_open = self.TimeKeeping.missionLife + 1e-9
         dt = next_open - t0
-        self.tk.allocate(dt)
+        self.TimeKeeping.allocate(dt)
         return {'star_num': None, 'mode': None, 'success': True, 't': t0, 'int_time': dt}
 
     def run_sim(self):
-        n = self.su.n_star
-        print(f"=== Star Observation Survey Simulation ({n} stars, eta={self.su.eta:.2f}) ===\n")
+        n = self.SimulatedUniverse.n_star
+        print(f"=== Star Observation Survey Simulation ({n} stars, eta={self.SimulatedUniverse.eta:.2f}) ===\n")
 
-        while not self.tk.finished():
+        while not self.TimeKeeping.finished():
             # Bookkeeping
             # -- why here? initial state is the cause of the observation chosen
             self.state_history.append([s.state for s in self.stars])
@@ -397,10 +397,10 @@ class SurveySimulation:
         self._print_summary()
 
     def _print_summary(self):
-        n_mode = self.os.n_mode
+        n_mode = self.OpticalSystem.n_mode
         mode_labels = []
         for m in range(n_mode):
-            uses = self.os.char_modes[m].get('uses', [])
+            uses = self.OpticalSystem.char_modes[m].get('uses', [])
             lbl = uses[0].replace('char_', '') if uses else f'M#{m}'
             mode_labels.append(lbl)
         sep = '  '
@@ -410,7 +410,7 @@ class SurveySimulation:
         fixed0 = f"{'':>4}  {'':>5}  {'':>6}  {'':>5}  {'':>8}"
         fixed2 = f"{'Star':>4}  {'dist':>5}  {'earths':>6}  {'n_det':>5}  {'n_det_ok':>8}"
         print(f"\n=== Final Star Outcomes "
-              f"(mission time: {self.tk.current_time:.1f} / {self.tk.missionLife:.1f} days) ===")
+              f"(mission time: {self.TimeKeeping.current_time:.1f} / {self.TimeKeeping.missionLife:.1f} days) ===")
         print(f"{fixed0}  {'n_char':^{mode_w}}  {'n_char_ok':^{mode_w}}")
         print(f"{fixed2}  {lbl_row}  {lbl_row}  state")
         for s in self.stars:
@@ -418,16 +418,16 @@ class SurveySimulation:
             no = s.n_char_ok
             nc_row = sep.join(f'{nc[m]:{col_w}d}' for m in range(n_mode))
             no_row = sep.join(f'{no[m]:{col_w}d}' for m in range(n_mode))
-            print(f"{s.star_num:4d}  {self.su.dist[s.star_num]:5.2f}  "
+            print(f"{s.star_num:4d}  {self.SimulatedUniverse.dist[s.star_num]:5.2f}  "
                   f"{s.earths:6d}  {s.n_det:5d}  {s.n_det_ok:8d}  "
                   f"{nc_row}  {no_row}  {s.state}")
 
 def run_one(specs):
-    tk = TimeKeeping(specs)
-    su = SimulatedUniverse(specs=specs)
-    os = OpticalSystem(su, specs)
-    sr = SpectralRetrieval(os, specs)
-    survey = SurveySimulation(tk, su, os, sr, specs)
+    TK = TimeKeeping(specs)
+    SU = SimulatedUniverse(specs=specs)
+    OS = OpticalSystem(SU, specs)
+    SR = SpectralRetrieval(OS, specs)
+    survey = SurveySimulation(TK, SU, OS, SR, specs)
     survey.run_sim()
     return survey
 

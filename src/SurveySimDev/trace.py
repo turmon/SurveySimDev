@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-'''Make "trace" plots of Survey Simulations
+'''Make "trace" plots of Survey Simulation schedules
+
+These plots show the full state machine (`machine.png`), the state
+machine overlaid with star-specific trajectories (`transitions.png`),
+and temporal strip plots of observations made (`strip.png`, `trace.png`).
+
 '''
 
 import argparse
@@ -191,7 +196,7 @@ class FSMInfo:
 
 
 def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png', faint=frozenset()):
-    n_star = survey.su.n_star
+    n_star = survey.SimulatedUniverse.n_star
     DRM = survey.DRM
     n_obs = len(DRM)
     if n_obs == 0:
@@ -247,7 +252,7 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png', faint=froze
             )
 
     # Y-axis: star number + earth count
-    earths = survey.su.earths
+    earths = survey.SimulatedUniverse.earths
     ax_main.set_yticks(range(n_star))
     ax_main.set_yticklabels([f"{i} - ({earths[i]})" for i in range(n_star)], fontsize=7)
     ax_main.set_ylabel('Star Number - (Earth Count)')
@@ -384,7 +389,7 @@ def _draw_fsm(ax, fsm_info, visited, taken, fontsize=7, shrink=8, mini=False,
 
 
 def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png', faint=frozenset()):
-    n_star = survey.su.n_star
+    n_star = survey.SimulatedUniverse.n_star
     n_cols = 5
     n_rows = (n_star + n_cols - 1) // n_cols
 
