@@ -62,6 +62,11 @@ class FSMInfo:
         self.success_state = self._top_row_term  # may be None
         _srcs = {t['src'] for t in self.transitions_full}
         self.terminal_states = frozenset(s for s in self.states if s not in _srcs)
+        if 'state_properties' in specs:
+            self.faint_states = frozenset(s for s in self.terminal_states
+                                 if specs['state_properties'].get(s).get('success',0) == 0)
+        else:
+            self.faint_states = frozenset()
 
     def _normalize_transitions(self, raw):
         result = []
@@ -298,7 +303,7 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png', faint=froze
     ax_main.legend(
         handles=state_patches + dot_handles,
         loc='lower left', fontsize=7, ncol=2,
-        framealpha=0.9, edgecolor='#ccc',
+        framealpha=0.8, edgecolor='#ccc',
     )
 
     # --- Side panel: earths indicator ---
@@ -699,10 +704,11 @@ def simulate_and_plot(args):
     survey = run_one(args.specs)
     # get the layout of the FSM
     fsm = FSMInfo(survey._specs)
-    if args.layout != 'auto':
+    if args.layout != 'rows':
         _apply_nx_layout(fsm, args.layout)
+    # de-emphasized points
+    faint = args.faint | fsm.faint_states
     # make all plots
-    faint = args.faint
     make_trace_plot(survey, fsm, faint=faint, save_path=args.output/'trace.png')
     make_transition_plot(survey, fsm, faint=faint, save_path=args.output/'transitions.png')
     make_machine_doc_plot(survey, fsm, faint=faint, save_path=args.output/'machine.png')
@@ -713,9 +719,9 @@ def main():
     parser = argparse.ArgumentParser(description='Plot survey simulation traces')
     parser.add_argument('--seed', type=int, default=None, metavar='SEED',
                         help='random seed (default: from specs, or 0)')
-    parser.add_argument('--layout', choices=['auto', 'depth', 'kk'],
-                        default='auto',
-                        help='FSM node layout (default: %(default)s; auto = hand-coded 2-row)')
+    parser.add_argument('--layout', choices=['rows', 'depth', 'kk'],
+                        default='depth',
+                        help='FSM node layout (default: %(default)s) [depth => tree; rows => 2-row; kk = kamada/kawai]')
     parser.add_argument('--faint', default='', metavar='NODES',
                         help='comma-separated node names to render faintly in FSM diagrams')
     parser.add_argument('--output', default=ROOTDIR, metavar='DIR', type=Path,
