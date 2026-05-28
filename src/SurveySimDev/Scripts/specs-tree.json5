@@ -39,6 +39,31 @@
     * "retrieval_models['nuv']". The same
     * measurement is used at 3 places in the decision process.
   */
+  "state_properties": {
+      // beginning
+      "unobserved": {"mode": -1},
+      "observing": {"mode": -1},
+      "orbit_det": {"mode": -1},
+      // chars
+      "char_vi1": {"mode": 0},
+      "char_vi2": {"mode": 1},
+      "char_ir1": {"mode": 2},
+      "char_ir2": {"mode": 2},
+      "char_ir3": {"mode": 2},
+      "char_uv1": {"mode": 3},
+      "char_uv2": {"mode": 3},
+      "char_uv3": {"mode": 3},
+      // outcomes
+      "found":       {"terminal": true},
+      "retired":     {"terminal": true},
+      "unknown":     {"terminal": true},
+      "ambiguous":   {"terminal": true, "success": -1},
+      "partial":     {"terminal": true, "success": -1},
+      "archean":     {"terminal": true, "success": 1},
+      "dead_rocky":  {"terminal": true, "success": 1},
+      "modern":      {"terminal": true, "success": 1},
+      "proterozoic": {"terminal": true, "success": 1},
+  },
   "state_transitions": [
     // these are OK
     { "trigger": "process_det",  "source": "unobserved", "dest": "observing", "unless":     "det_exists" },
@@ -109,12 +134,10 @@
       "lam": 500,
       "SNR": 7
     },
+      // VIS, water band
     {
       "instName": "spectro910_R70_EMCCD",
       "systName": "VVC575",
-      "uses": [
-        "char_vi1" // water band
-      ],
       "mode_num": 0,
       "int_factor_x": 1.2,
       "comp_bound_x": 0.8,
@@ -122,13 +145,10 @@
       "lam": 910,
       "SNR": 5.0
     },
-    // VIS mode for O2
+      // VIS, O2
     {
       "instName": "spectro740_R70_EMCCD", // updated wavelength
       "systName": "VVC575",
-      "uses": [
-        "char_vi2"  // O2 band
-      ],
       "mode_num": 1,
       "int_factor_x": 1.2,
       "comp_bound_x": 0.8,
@@ -139,11 +159,6 @@
     {
       "instName": "spectro1650_R40_EMCCD", // updated WL
       "systName": "VVC575",
-      "uses": [
-        "char_ir1",
-        "char_ir2",
-        "char_ir3",
-      ],
       "mode_num": 2,
       "int_factor_x": 1.8,
       "comp_bound_x": 0.8,
@@ -154,11 +169,6 @@
     {
       "instName": "spectro_NUV254_EMCCD", // updated WL
       "systName": "VVC575",
-      "uses": [
-        "char_uv1",
-        "char_uv2",
-        "char_uv3",
-      ],
       "mode_num": 3,
       "int_factor_x": 1.0,
       "comp_bound_x": 0.9,
