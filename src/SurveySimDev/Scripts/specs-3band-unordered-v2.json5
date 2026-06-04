@@ -1,0 +1,116 @@
+//
+// Three serial characterizations: VIS, NUV, NIR
+// 
+// Blind Search -> Orbit Characterization -> {VIS, NUV, NIR}
+//
+// simple implementation that counts chars
+//
+{
+  "eta": 0.4,               // mean number of earths per star                       
+  "missionLife": 1826.25,   // days -- total mission duration                       
+  "n_star": 30,		    // number of stars in the simulated catalog             
+  "seed": 0,		    // RNG seed; 0 means unseeded (random)                  
+  "n_det_remove": 4,	    // failed det attempts before retiring a star           
+  "n_char_remove": 2,	    // char attempts per mode before retiring               
+  "n_char_finish": 1,       // char successes per mode before finishing that mode
+  "intCutoff": 60.0,	    // days -- skip char observations longer than this      
+  "revisit_wait": 109.575,  // days -- min gap after any detection attempt          
+  "gap_required": 182.625,  // days -- min temporal baseline for orbit determination
+  "obs_overhead": 0.2,	    // days -- overhead added to every observation          
+  "char_overhead": 0.8,	    // days -- additional overhead for characterizations    
+  "state_initial": {
+    "*": "unobserved"
+  },
+  "state_properties": {
+    "unobserved": {"mode": -1},
+    "observing": {"mode": -1},
+    "orbit_det": {"mode": -1},
+    "char1": {"mode": [0, 1, 2]},
+    "char2": {"mode": [0, 1, 2]},
+    "char3": {"mode": [0, 1, 2]},
+    "found": {"terminal": true},
+    "partial": {"terminal": true},
+    "retired": {"terminal": true},
+    "unknown": {"terminal": true},  // consider leaving one out as a demo
+    "success": {"success": 1},
+  },
+  "state_transitions": [
+    { "trigger": "process_det",  "source": "unobserved","dest": "observing", "unless": "det_exists" },
+    { "trigger": "process_det",  "source": "unobserved","dest": "orbit_det", "conditions": "det_exists" },
+    { "trigger": "process_det",  "source": "observing", "dest": "orbit_det", "conditions": "det_exists" },
+    { "trigger": "process_det",  "source": "observing", "dest": "retired",   "conditions": "det_exhausted",  "after": "forget_star" },
+    { "trigger": "process_det",  "source": "orbit_det", "dest": "char1",     "conditions": ["has_orbit_count",
+								   		          "has_orbit_span"], "after": "promote_star" },
+    { "trigger": "process_det",  "source": "orbit_det", "dest": "retired", "conditions": "orbit_exhausted", "after": "forget_star" },
+    { "trigger": "process_char", "source": "char1",     "dest": "char2",   "conditions": "char_exists" },
+    { "trigger": "process_char", "source": "char1",     "dest": "retired", "conditions": "char_exhausted", "after": "forget_star" },
+    { "trigger": "process_char", "source": "char2",     "dest": "char3",   "conditions": "char_exists" },
+    { "trigger": "process_char", "source": "char2",     "dest": "partial", "conditions": "char_exhausted", "after": "forget_star" },
+    { "trigger": "process_char", "source": "char3",     "dest": "success", "conditions": "char_exists",    "after": "forget_star" },
+    { "trigger": "process_char", "source": "char3",     "dest": "partial", "conditions": "char_exhausted", "after": "forget_star" },
+    { "trigger": "end_mission",  "source": ["char2",
+					    "char3"], "dest": "partial" },
+    { "trigger": "end_mission",  "source": ["orbit_det",
+					    "char1"], "dest": "found" },
+    { "trigger": "end_mission",  "source": "observing",  "dest": "unknown" }
+  ],
+  // Note on observingModes
+  //  Extras (useful):
+  //     uses: links the SurveySimulation state to this observingMode
+  //     mode_num: it's explicit here, but real EXOSIMS inserts it dynamically
+  //   Extras (non-physical, added just to run the sim):
+  //   int_factor_x: intTime multiplier per char mode (just for a mockup)
+  //     comp_bound_x: lower bound of completeness per mode (just for a mockup)
+  "observingModes": [
+    {
+      "instName": "imaging_BroadbandVisible_500",
+      "systName": "VVC500",
+      "mode_num": -1,
+      "int_factor_x": 1.0,
+      "comp_bound_x": 0.1,
+      "detection": true,
+      "lam": 500,
+      "SNR": 7
+    },
+    {
+      "instName": "spectro910_R70_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 0,
+      "int_factor_x": 1.2,
+      "comp_bound_x": 0.8,
+      "detection": false,
+      "lam": 910,
+      "SNR": 5.0
+    },
+    {
+      "instName": "spectro_NUV310_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 1,
+      "int_factor_x": 1.0,
+      "comp_bound_x": 0.9,
+      "detection": false,
+      "lam": 310,
+      "SNR": 5.0
+    },
+    {
+      "instName": "spectro1500_R40_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 2,
+      "int_factor_x": 2.0,
+      "comp_bound_x": 0.5,
+      "detection": false,
+      "lam": 1500,
+      "SNR": 8.5
+    }
+  ],
+  /*
+    * Spectral retrieval parametric settings 
+    *   Purpose: basic multi-band retrieval
+    *   concept: all are deferred: get the spectrum for later analysis
+  */
+  "retrieval_models": {
+    "QOIs_0": {},
+    "QOIs_1": {},
+    "QOIs_2": {}
+  }
+}

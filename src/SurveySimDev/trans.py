@@ -3,6 +3,7 @@
 '''
 
 import argparse
+import re
 from dataclasses import dataclass, field
 import json
 import numpy as np
@@ -143,7 +144,7 @@ class SpectralRetrieval:
 
 class StarInfo(StarInfoTreeMixin):
     n_mode = None
-    def __init__(self, star_num, earths, gap_required, n_det_remove, n_char_remove):
+    def __init__(self, star_num, earths, gap_required, n_det_remove, n_char_remove, n_char_finish):
         if not self.n_mode:
             raise RuntimeError('StarInfo needs its n_mode set')
         self.star_num = star_num
@@ -152,6 +153,7 @@ class StarInfo(StarInfoTreeMixin):
         # operational parameters (could be stored elsewhere)
         self.n_det_remove = n_det_remove
         self.n_char_remove = n_char_remove
+        self.n_char_finish = n_char_finish
         # scheduler state (updated over epochs)
         self.n_det = 0
         self.n_det_ok = 0
@@ -163,6 +165,22 @@ class StarInfo(StarInfoTreeMixin):
         self.t_det_attempt = None   # time of last detection attempt (success or failure)
         self.promoted = False  # allowed to make chars
         self.eligible = True  # eligible for new observations
+
+
+    # --- parametric predicates for "condition" and "unless" in transitions ---
+
+    def __getattr__(self, name):
+        r'''Define parametric functions implementing predicates
+        char_exists_modeN: mode == N and char does exist
+        '''
+        match = re.match(r"^char_exists_mode(\d+)$", name)
+        if match:
+            m = int(match.group(1))
+            # 'self' is captured in the closure
+            return lambda mode, retrieval: mode == m and self.n_char_ok[mode] > 0
+
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
 
     # --- predicates for "condition" and "unless" in transitions ---
 
@@ -196,6 +214,10 @@ class StarInfo(StarInfoTreeMixin):
     def char_exhausted(self, mode=None, retrieval=None):
         '''Characterization limit was reached'''
         return self.n_char[mode] >= self.n_char_remove
+
+    def char_finished(self, mode=None, retrieval=None):
+        '''Enough successful characterizations achieved in mode'''
+        return self.n_char_ok[mode] >= self.n_char_finish
 
     # --- callbacks that adjust star state
 
@@ -236,9 +258,10 @@ class SurveySimulation:
         self.SpectralRetrieval = spectral_retrieval
         self.revisit_wait  = specs['revisit_wait']
         self.gap_required  = specs['gap_required']
-        self.intCutoff       = specs['intCutoff']
-        self.n_det_remove  = specs['n_det_remove']
-        self.n_char_remove = specs['n_char_remove']
+        self.intCutoff       = specs.get('intCutoff', 60.0)
+        self.n_det_remove  = specs.get('n_det_remove', 4)
+        self.n_char_remove = specs.get('n_char_remove', 2)
+        self.n_char_finish = specs.get('n_char_finish', 1)
         self._specs = specs
         self.state_props = self._normalize_state_props(specs)
         self.rng = sim_universe.rng
@@ -253,6 +276,7 @@ class SurveySimulation:
                 gap_required=self.gap_required,
                 n_det_remove=self.n_det_remove,
                 n_char_remove=self.n_char_remove,
+                n_char_finish=self.n_char_finish,
             )
             for i in range(sim_universe.n_star)
         ]
@@ -312,6 +336,8 @@ class SurveySimulation:
         char_initial_cands = [s for s in self.stars if self._char_eligible(s)]
         for s in char_initial_cands:
             for m in self.state_props[s.state].mode:
+                if s.char_finished(mode=m):
+                    continue
                 if self.OpticalSystem.calc_intTime(s.star_num, m) <= self.intCutoff:
                     char_mode_cands.append((s, m))
         if char_mode_cands:

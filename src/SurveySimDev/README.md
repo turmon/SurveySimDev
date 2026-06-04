@@ -3,11 +3,24 @@
 Test harness for encapsulation of state in a StarInfo class, and integration
 of StarInfo instances with a state diagram.
 
+## Input scripts
+
+There are several scripts in `Scripts/*.json5` (in JSON5, which allows comments) to serve
+as input for the mock scheduler below.
+
 ## Code units
 
 `trans.py` -- `uv run trans.py` -- Perform one survey simulation
 
 `trace.py` -- `uv run trace.py` -- Perform one survey simulation, and plot the results (DRM, etc.)
+
+## Makefile
+
+The `Makefile` incorporates some execution idioms:
+
+`make Scripts/script.json` -- Converts `Scripts/script.json5` into `Scripts/script.json` by stripping comments.
+
+`make S=Scripts/script.json trace` -- Runs `trace.py` with input `script.json`, writing resulting graphics to `sims/script/*.png`
 
 ## Remarks
 
@@ -33,6 +46,8 @@ TODO: `trans.py`: Remove some of the debugging print()'s. A few are hyper-specif
 [done]
 
 TODO: `trans.py`: Needs to allow for specs-controlled changes to StarInfo mixins. Similar to specs["modules"] now.
+
+TODO: `trans.py`: transitions.png does not show the last state transition correctly (on the diagram) if it's a faint state.
 
 TODO: `trace.py`: Make a new version of `coroOnlyScheduler.py` with the features of `trace.py`. Do not overplan, try it YOLO-ish and fix the mess later.
 

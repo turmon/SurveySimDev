@@ -8,6 +8,7 @@ and temporal strip plots of observations made (`strip.png`, `trace.png`).
 '''
 
 import argparse
+import re
 from collections import deque
 from pathlib import Path
 import colorsys
@@ -172,10 +173,16 @@ class FSMInfo:
             return s
         return '\n'.join(p.upper() if len(p) <= 3 else p for p in parts)
 
+    @staticmethod
+    def _make_abbrev_char(text):
+        '''Matches initial "char_" or "char", returns everything after'''
+        match = re.match(r"^char_?(.*)$", text)
+        return match.group(1) if match else text
+
     def _make_abbrev(self):
         raw = {}
         for s in self.states:
-            stem = s[len('char_'):] if s.startswith('char_') else s
+            stem = self._make_abbrev_char(s)
             raw[s] = stem[:3]
         count = {}
         for ab in raw.values():
@@ -278,7 +285,9 @@ def make_trace_plot(survey, fsm_info, save_path=ROOTDIR/'trace.png', faint=froze
     ax2.set_xticklabels([f"{DRM[k]['t'] / 365.25:.1f}" for k in tick_idx], fontsize=7)
     ax2.set_xlabel('Mission time (yr)', fontsize=9)
 
-    ax_main.set_title('Survey Simulation: Observing History',
+    ax_main.set_title('\n'.join((
+        'Survey Simulation: Observing History',
+        f'Scenario: {survey.scenario}')),
                       fontweight='bold', pad=22)
 
     # Grid lines between rows
@@ -423,8 +432,11 @@ def make_transition_plot(survey, fsm_info, save_path=ROOTDIR/'transitions.png', 
     ax_full = fig.add_subplot(gs[0])
     _draw_fsm(ax_full, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
               fontsize=9, shrink=14, mini=False, faint=faint)
-    ax_full.set_title('Survey Simulation State Machine\nTransition History by Star',
-                      fontweight='bold', fontsize=12, pad=8)
+    ax_full.set_title('\n'.join((
+        'Survey Simulation State Machine',
+        f'Scenario: {survey.scenario}',
+        'Transition History by Star')),
+    fontweight='bold', fontsize=12, pad=8)
 
     # Per-star grid
     gs_stars = GridSpecFromSubplotSpec(
@@ -473,7 +485,10 @@ def make_machine_doc_plot(survey, fsm_info, save_path=ROOTDIR/'machine.png', fai
     ax = fig.add_subplot(gs[0])
     _draw_fsm(ax, fsm_info, set(fsm_info.states), set(fsm_info.all_transitions),
               fontsize=10, shrink=16, mini=False, faint=faint)
-    ax.set_title('Survey Simulation State Machine\nTriggers, Guard Conditions, Allowed Transitions',
+    ax.set_title('\n'.join((
+        'Survey Simulation State Machine',
+        f'Scenario: {survey.scenario}',
+        'Triggers, Guard Conditions, Allowed Transitions')),
                  fontweight='bold', fontsize=12, pad=8)
 
     horiz_idx = 0
@@ -702,6 +717,7 @@ def _apply_nx_layout(fsm_info, layout):
 def simulate_and_plot(args):
     # run a simulation
     survey = run_one(args.specs)
+    survey.scenario = args.scenario
     # get the layout of the FSM
     fsm = FSMInfo(survey._specs)
     if args.layout != 'rows':
@@ -734,6 +750,7 @@ def main():
     if args.seed is not None:
         args.specs['seed'] = args.seed
     args.faint = set(args.faint.split(',')) - {''} if args.faint else set()
+    args.scenario = Path(args.specs_file).stem
     args.output.mkdir(parents=True, exist_ok=True)
     simulate_and_plot(args)
     
