@@ -49,7 +49,12 @@ simple-trace:
 	uv run util/json5_to_json.py < $< > $@
 
 
-# code-gen
+#################################
+#
+# Code generation
+#
+# NB: this could be replaced by extending
+# the__getattr__ hook in the StarInfo class
 
 # mixin class for decision-tree predicates
 TREE_PREDICATE_CODE=StarInfoTree.py
@@ -64,6 +69,7 @@ predicates:$(TREE_PREDICATE_CODE)
 $(TREE_PREDICATE_CODE): $(TREE_PREDICATE_NAMES)
 	python gen_predicates.py > StarInfoTree.py
 
+# extract all predicates we in the decision tree
 $(TREE_PREDICATE_NAMES): Scripts/specs-tree.json
 	jq -r '.state_transitions.[].conditions' < $< > $@
 

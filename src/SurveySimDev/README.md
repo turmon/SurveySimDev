@@ -24,31 +24,77 @@ The `Makefile` incorporates some execution idioms:
 
 ## Remarks
 
-TODO: `trace.py`: Plot titles in could be improved
-[done]
+Observing modes in "specs" and `trans.py`: Vertex list maps each 
+vertex to the observing mode(s) that it can looks at. Note, this is a 
+*list* of observingMode numbers -- when in this state,
+the scheduler can try any of these modes.
 
-TODO: `trace.py`: Guard conditions on edges in `machine.png` are coming out on top of vertices. Raise zorder of vertices. 
-[done]
+## Parallel Characterizations
 
-TODO: `trans.py`: need a vertex list. Arrange this to replace the "uses"
-key in the observingMode dictionary. Main function of vertex list is to map
-vertex to the observing mode(s) that it looks at. Yes, this will be a
-*list* of observingMode numbers. >1 mode means parallel-in-time
+Generically, "parallel modes" means parallel-in-time
 observations with (a) integration time = max\_mode(Tint(mode)); (b)
 completeness for finding char\_ok is the max of observing-mode
-completenesses; 
+completenesses; (c) keepout is the intersection
+of single-mode keepout (but see below -- same Starlight
+Suppression implies same keepout modulo wavelength).
 
-TODO: The next\_target() scan should not loop over modes! It
-should use the mode taken from the current observing
+Who is responsible for doing the work? 
+- Key: Do we make OpticalSystem responsible for knowing about 
+integration time of parallel modes? Alternatively, could
+we have an OpticalSystem mixin class that would over-ride
+the integration time method? Or do we implement that in the 
+scheduler? Would one way to do that
+- Side issues. Other consumers of "ObservingMode" are 
+Completeness, TargetList (for completeness filtering),
+Observatory (for keepout, depending on 
+StarlightSuppressionSystem, which I suppose would be the same).
+Note: given that we don't actually use characterization 
+completeness, the Completeness part may be moot.
+
+Just encoding the information.
+(A) Could encode in the list-of-modes at observing-state S. E.g., S could
+contain a list-of-lists-of-modes, where each sub-list is a group of parallel
+observing modes. At present, S contains a list-of-modes. 
+(B) Encode in a list of "parallel mode" instruments (in `instName`) that point to 
+the instruments that will be used. I don't think this would be sensible
+because too much information (lambda, SNR) will be replicated in other
+lists, also in the observingMode
+(C) Encode in a new variant-type ObservingMode that points to
+all the information for the other parallel modes. Then we would always be observing
+in a given single mode, but sometimes that mode would be running in parallel.
+(D) Encode a "parallel sub-mode" in a given mode M that points to another
+observing mode. 
+
+Recording what has been done. We typically have a list (length #observingModes)
+to record status. 
+Suppose we have modes:
+M1, M2, M3 = (M1 || M2)
+Can we reason about doing M1 alone, M2 alone, or M3 alone?
+A parallel-char can be half-successful (M1 || M2 could have M1 ok but M2 fail).
+How do you record this in such a list (and then make decisions later)?
+For instance, in (B) above, we would end up needing to record a composite
+success in char_ok[M3], and we're not equipped for that.
+
+Summary: We need to understand problem constraints to make good 
+design choices. I'm making too big a deal about the other consumers
+of modes -- just take care of integration time.
+
+
+## TODOs
+
+
+TODO: `trans.py`: The next\_target() scan should not loop over modes. 
+It should use the modes-allowed list taken from the current observing
 state of the star.
+[DONE]
 
-TODO: `trans.py`: Remove some of the debugging print()'s. A few are hyper-specific.
-[done]
+TODO: Specs encoding: Vertex list set up to declare terminal nodes, but I think they could
+be found automatically.
 
-TODO: `trans.py`: Needs to allow for specs-controlled changes to StarInfo mixins. Similar to specs["modules"] now.
+TODO: `trans.py`: Allow for specs-controlled changes to StarInfo mixins. Similar to specs["modules"] now.
 
 TODO: `trans.py`: transitions.png does not show the last state transition correctly (on the diagram) if it's a faint state.
 
-TODO: `trace.py`: Make a new version of `coroOnlyScheduler.py` with the features of `trace.py`. Do not overplan, try it YOLO-ish and fix the mess later.
+TODO: Make a new version of `coroOnlyScheduler.py` with the features of `trans.py`. Do not overplan, try it YOLO-ish and fix the mess later.
 
 

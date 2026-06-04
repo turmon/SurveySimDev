@@ -6,5 +6,7 @@ Currently trying out state-transition or finite-state-machine approaches and thi
 about whether they can be general enough to accommodate decision-tree-like 
 observation choice.
 
-(May 2026)
+For design information and current status, see `CLAUDE.md`.
+
+(June 2026)
 
