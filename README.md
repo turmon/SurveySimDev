@@ -1,6 +1,6 @@
 # EXOSIMS-Scheduler-Dev
 
-[!State Chart Example](example-FSM.png)
+![State Chart Example](example-FSM.png)
 
 Area for experiments in scheduler design for EXOSIMS.
 
