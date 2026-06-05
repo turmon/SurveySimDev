@@ -1,4 +1,31 @@
+##
+## Intial section: fixed run-lines
+##
 
+# Run line: Observing sequence only
+simple-trans:
+	uv run trans.py Scripts/specs-simple.json
+
+# Run line: Observing sequence plus plots
+simple-trace:
+	uv run trace.py Scripts/specs-simple.json
+
+# Script file conversion
+%.json: %.json5
+	uv run util/json5_to_json.py < $< > $@
+
+%.json: %.jsonc
+	uv run util/json5_to_json.py < $< > $@
+
+# pseudo-target to re-make all existing sims/ content
+# (using the rules below)
+all-sims:
+	for S in sims/*; do $(MAKE) S=$$S trace; done
+
+.PHONY: all-sims simple-trans simple-trace
+
+########################################################
+## [Copied from Sandbox Makefile]
 ## Normalize the S input from a (possible) file/dir name -> script name
 # 1: ensure S is simply-expanded variable, so it can be redefined
 ifdef S
@@ -25,29 +52,21 @@ S := $(strip $(S))
 ifdef S_COPY
  $(info Make: Scenario name: "$(S)")
 endif
+########################################################
+
+##
+## Arbitrary-script runs
+##
+## usage: make S=<spec_file_name> trace
+##
 
 trace: sims/$(S)/README.md
 
 sims/$(S)/README.md: Scripts/$(S).json
 	uv run trace.py --output sims/$(S) Scripts/$(S).json
 	cp Scripts/$(S).json sims/$(S) 
+	- cp Scripts/$(S).json5 sims/$(S) 
 	uv run util/write_scheduler_readme.py Scripts/$(S).json > $@
-
-# Run line: Observing sequence only
-simple-trans:
-	uv run trans.py Scripts/specs-simple.json
-
-# Run line: Observing sequence plus plots
-simple-trace:
-	uv run trace.py Scripts/specs-simple.json
-
-# File conversion
-
-%.json: %.json5
-	uv run util/json5_to_json.py < $< > $@
-
-%.json: %.jsonc
-	uv run util/json5_to_json.py < $< > $@
 
 
 #################################
