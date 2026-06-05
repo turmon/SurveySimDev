@@ -1,0 +1,316 @@
+{
+  "eta": 0.4,
+  "missionLife": 1826.25,
+  "n_star": 30,
+  "seed": 0,
+  "n_det_remove": 4,
+  "n_char_remove": 2,
+  "intCutoff": 60.0,
+  "revisit_wait": 109.575,
+  "gap_required": 182.625,
+  "obs_overhead": 0.2,
+  "char_overhead": 0.8,
+  "state_initial": {
+    "*": "unobserved"
+  },
+  "state_properties": {
+    "unobserved": {
+      "mode": -1
+    },
+    "observing": {
+      "mode": -1
+    },
+    "orbit_det": {
+      "mode": -1
+    },
+    "char000": {
+      "mode": [
+        0,
+        1,
+        2
+      ]
+    },
+    "char100": {
+      "mode": [
+        1,
+        2
+      ]
+    },
+    "char010": {
+      "mode": [
+        0,
+        2
+      ]
+    },
+    "char001": {
+      "mode": [
+        0,
+        1
+      ]
+    },
+    "char011": {
+      "mode": 0
+    },
+    "char101": {
+      "mode": 1
+    },
+    "char110": {
+      "mode": 2
+    },
+    "found": {
+      "terminal": true
+    },
+    "partial": {
+      "terminal": true
+    },
+    "retired": {
+      "terminal": true
+    },
+    "unknown": {
+      "terminal": true
+    },
+    "success": {
+      "success": 1
+    }
+  },
+  "state_transitions": [
+    {
+      "trigger": "process_det",
+      "source": "unobserved",
+      "dest": "observing",
+      "unless": "det_exists"
+    },
+    {
+      "trigger": "process_det",
+      "source": "unobserved",
+      "dest": "orbit_det",
+      "conditions": "det_exists"
+    },
+    {
+      "trigger": "process_det",
+      "source": "observing",
+      "dest": "orbit_det",
+      "conditions": "det_exists"
+    },
+    {
+      "trigger": "process_det",
+      "source": "observing",
+      "dest": "retired",
+      "conditions": "det_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_det",
+      "source": "orbit_det",
+      "dest": "char000",
+      "conditions": [
+        "has_orbit_count",
+        "has_orbit_span"
+      ],
+      "after": "promote_star"
+    },
+    {
+      "trigger": "process_det",
+      "source": "orbit_det",
+      "dest": "retired",
+      "conditions": "orbit_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char000",
+      "dest": "char100",
+      "conditions": "char_exists_mode0"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char000",
+      "dest": "char010",
+      "conditions": "char_exists_mode1"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char000",
+      "dest": "char001",
+      "conditions": "char_exists_mode2"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char000",
+      "dest": "retired",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char100",
+      "dest": "char110",
+      "conditions": "char_exists_mode1"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char100",
+      "dest": "char101",
+      "conditions": "char_exists_mode2"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char010",
+      "dest": "char110",
+      "conditions": "char_exists_mode0"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char010",
+      "dest": "char011",
+      "conditions": "char_exists_mode2"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char001",
+      "dest": "char101",
+      "conditions": "char_exists_mode0"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char001",
+      "dest": "char011",
+      "conditions": "char_exists_mode1"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char100",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char010",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char001",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char011",
+      "dest": "success",
+      "conditions": "char_exists_mode0",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char101",
+      "dest": "success",
+      "conditions": "char_exists_mode1",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char110",
+      "dest": "success",
+      "conditions": "char_exists_mode2",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char011",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char101",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char110",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "end_mission",
+      "source": [
+        "char001",
+        "char010",
+        "char100",
+        "char011",
+        "char101",
+        "char110"
+      ],
+      "dest": "partial"
+    },
+    {
+      "trigger": "end_mission",
+      "source": [
+        "orbit_det",
+        "char000"
+      ],
+      "dest": "found"
+    },
+    {
+      "trigger": "end_mission",
+      "source": "observing",
+      "dest": "unknown"
+    }
+  ],
+  "observingModes": [
+    {
+      "instName": "imaging_BroadbandVisible_500",
+      "systName": "VVC500",
+      "mode_num": -1,
+      "int_factor_x": 1.0,
+      "comp_bound_x": 0.1,
+      "detection": true,
+      "lam": 500,
+      "SNR": 7
+    },
+    {
+      "instName": "spectro910_R70_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 0,
+      "int_factor_x": 0.9,
+      "comp_bound_x": 0.7,
+      "detection": false,
+      "lam": 910,
+      "SNR": 5.0
+    },
+    {
+      "instName": "spectro_NUV310_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 1,
+      "int_factor_x": 0.9,
+      "comp_bound_x": 0.7,
+      "detection": false,
+      "lam": 310,
+      "SNR": 5.0
+    },
+    {
+      "instName": "spectro1500_R40_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 2,
+      "int_factor_x": 0.9,
+      "comp_bound_x": 0.7,
+      "detection": false,
+      "lam": 1500,
+      "SNR": 8.5
+    }
+  ],
+  "retrieval_models": {
+    "QOIs_0": {},
+    "QOIs_1": {},
+    "QOIs_2": {}
+  }
+}

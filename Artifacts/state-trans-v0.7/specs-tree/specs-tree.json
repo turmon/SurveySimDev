@@ -1,0 +1,421 @@
+{
+  "eta": 0.9,
+  "one_planet": true,
+  "missionLife": 1826.25,
+  "n_star": 30,
+  "seed": 0,
+  "n_det_remove": 4,
+  "n_char_remove": 2,
+  "intCutoff": 60.0,
+  "revisit_wait": 109.575,
+  "gap_required": 182.625,
+  "obs_overhead": 0.2,
+  "char_overhead": 0.8,
+  "state_initial": {
+    "*": "unobserved"
+  },
+  "state_properties": {
+    "unobserved": {
+      "mode": -1
+    },
+    "observing": {
+      "mode": -1
+    },
+    "orbit_det": {
+      "mode": -1
+    },
+    "char_vi1": {
+      "mode": 0
+    },
+    "char_vi2": {
+      "mode": 1
+    },
+    "char_ir1": {
+      "mode": 2
+    },
+    "char_ir2": {
+      "mode": 2
+    },
+    "char_ir3": {
+      "mode": 2
+    },
+    "char_uv1": {
+      "mode": 3
+    },
+    "char_uv2": {
+      "mode": 3
+    },
+    "char_uv3": {
+      "mode": 3
+    },
+    "found": {
+      "terminal": true
+    },
+    "retired": {
+      "terminal": true
+    },
+    "unknown": {
+      "terminal": true
+    },
+    "ambiguous": {
+      "terminal": true,
+      "success": -1
+    },
+    "partial": {
+      "terminal": true,
+      "success": -1
+    },
+    "archean": {
+      "terminal": true,
+      "success": 1
+    },
+    "dead_rocky": {
+      "terminal": true,
+      "success": 1
+    },
+    "modern": {
+      "terminal": true,
+      "success": 1
+    },
+    "proterozoic": {
+      "terminal": true,
+      "success": 1
+    }
+  },
+  "state_transitions": [
+    {
+      "trigger": "process_det",
+      "source": "unobserved",
+      "dest": "observing",
+      "unless": "det_exists"
+    },
+    {
+      "trigger": "process_det",
+      "source": "unobserved",
+      "dest": "orbit_det",
+      "conditions": "det_exists"
+    },
+    {
+      "trigger": "process_det",
+      "source": "observing",
+      "dest": "orbit_det",
+      "conditions": "det_exists"
+    },
+    {
+      "trigger": "process_det",
+      "source": "observing",
+      "dest": "retired",
+      "conditions": "det_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_det",
+      "source": "orbit_det",
+      "dest": "char_vi1",
+      "conditions": [
+        "has_orbit_count",
+        "has_orbit_span"
+      ],
+      "after": "promote_star"
+    },
+    {
+      "trigger": "process_det",
+      "source": "orbit_det",
+      "dest": "retired",
+      "conditions": "orbit_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_vi1",
+      "dest": "dead_rocky",
+      "conditions": "sr_H2O_no",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_vi1",
+      "dest": "char_ir3",
+      "conditions": "sr_H2O_yes_CH4_yes"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_vi1",
+      "dest": "char_vi2",
+      "conditions": "sr_H2O_yes"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_vi1",
+      "dest": "retired",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_vi2",
+      "dest": "dead_rocky",
+      "conditions": "sr_O2_high",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_vi2",
+      "dest": "char_ir1",
+      "conditions": "sr_O2_medium"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_vi2",
+      "dest": "char_ir2",
+      "conditions": "sr_O2_no"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_vi2",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_ir1",
+      "dest": "char_uv1",
+      "conditions": "sr_CH4_no"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_ir1",
+      "dest": "modern",
+      "conditions": "sr_CH4_yes"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_ir1",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_ir2",
+      "dest": "char_uv3",
+      "conditions": "sr_CH4_yes_CO2_yes"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_ir2",
+      "dest": "char_uv2",
+      "conditions": "sr_ok"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_ir2",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_ir3",
+      "dest": "ambiguous",
+      "conditions": "sr_CO2_no",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_ir3",
+      "dest": "archean",
+      "conditions": "sr_CO2_yes",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_ir3",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_uv1",
+      "dest": "ambiguous",
+      "conditions": "sr_press_low",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_uv1",
+      "dest": "modern",
+      "conditions": "sr_press_high",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_uv1",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_uv2",
+      "dest": "proterozoic",
+      "conditions": "sr_press_low",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_uv2",
+      "dest": "ambiguous",
+      "conditions": "sr_press_high",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_uv2",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_uv3",
+      "dest": "archean",
+      "conditions": "sr_O3_no",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_uv3",
+      "dest": "proterozoic",
+      "conditions": "sr_O3_yes",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "process_char",
+      "source": "char_uv3",
+      "dest": "partial",
+      "conditions": "char_exhausted",
+      "after": "forget_star"
+    },
+    {
+      "trigger": "end_mission",
+      "source": [
+        "char_vi2",
+        "char_ir1",
+        "char_ir2",
+        "char_ir3",
+        "char_uv1",
+        "char_uv2",
+        "char_uv3"
+      ],
+      "dest": "partial"
+    },
+    {
+      "trigger": "end_mission",
+      "source": [
+        "orbit_det",
+        "char_vi1"
+      ],
+      "dest": "found"
+    },
+    {
+      "trigger": "end_mission",
+      "source": "observing",
+      "dest": "unknown"
+    }
+  ],
+  "observingModes": [
+    {
+      "instName": "imaging_BroadbandVisible_500",
+      "systName": "VVC500",
+      "uses": [],
+      "mode_num": -1,
+      "int_factor_x": 1.0,
+      "comp_bound_x": 0.1,
+      "detection": true,
+      "lam": 500,
+      "SNR": 7
+    },
+    {
+      "instName": "spectro910_R70_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 0,
+      "int_factor_x": 1.2,
+      "comp_bound_x": 0.8,
+      "detection": false,
+      "lam": 910,
+      "SNR": 5.0
+    },
+    {
+      "instName": "spectro740_R70_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 1,
+      "int_factor_x": 1.2,
+      "comp_bound_x": 0.8,
+      "detection": false,
+      "lam": 740,
+      "SNR": 5.0
+    },
+    {
+      "instName": "spectro1650_R40_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 2,
+      "int_factor_x": 1.8,
+      "comp_bound_x": 0.8,
+      "detection": false,
+      "lam": 1650,
+      "SNR": 8.5
+    },
+    {
+      "instName": "spectro_NUV254_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 3,
+      "int_factor_x": 1.0,
+      "comp_bound_x": 0.9,
+      "detection": false,
+      "lam": 254,
+      "SNR": 5.0
+    }
+  ],
+  "retrieval_models": {
+    "QOIs_0": {
+      "H2O": {
+        "no": 0.1,
+        "yes": 0.6
+      },
+      "CH4": {
+        "no": 0.1,
+        "yes": 0.6
+      }
+    },
+    "QOIs_1": {
+      "O2": {
+        "no": 0.2,
+        "medium": 0.5,
+        "high": 0.8
+      }
+    },
+    "QOIs_2": {
+      "CO2": {
+        "no": 0.3,
+        "yes": 0.7
+      },
+      "CH4": {
+        "no": 0.4,
+        "yes": 0.7
+      }
+    },
+    "QOIs_3": {
+      "O3": {
+        "no": 0.2,
+        "yes": 0.7
+      },
+      "press": {
+        "low": 0.3,
+        "high": 0.8
+      }
+    }
+  }
+}
