@@ -1,7 +1,11 @@
 //
-// Simple One-band characterization
+// Simple one-band characterization
 //
-// Blind Search/Orbit Characterization/VIS-range Characterization
+// Blind Search -> Orbit Characterization -> VIS-range Characterization
+//
+// This is the simplest characterization concept (VIS-only),
+// but it still includes the blind search phase.
+//
 //
 {
   "eta": 0.4,

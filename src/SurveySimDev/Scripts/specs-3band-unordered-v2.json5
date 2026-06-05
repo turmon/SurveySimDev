@@ -3,7 +3,12 @@
 // 
 // Blind Search -> Orbit Characterization -> {VIS, NUV, NIR}
 //
-// simple implementation that counts chars
+// Simpler implementation (-v2) that counts chars, rather than 
+// the other one (-v1) that has separate 
+// states for each band-by-band characterization that has been processed.
+//
+// It illustrates that there's more than one way to encode an 
+// observing sequence into a state machine.
 //
 {
   "eta": 0.4,               // mean number of earths per star                       

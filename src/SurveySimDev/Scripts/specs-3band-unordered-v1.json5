@@ -4,6 +4,7 @@
 // Blind Search -> Orbit Characterization -> {VIS, NUV, NIR}
 //
 // In contrast to regular 3-band, these chars can be done in any order
+//
 // This first version uses a full decomposition of state space into
 // 2^3 = 8 characterization states, counting each individual band's
 // characterization. The -v2 version uses 3 characterization states 

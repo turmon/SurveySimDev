@@ -1,5 +1,30 @@
 //
-// Decision tree observing sequence -- work in progress
+// Decision tree observing sequence -- Young et al.
+//
+// This is a more complex observing sequence encoding a
+// simple decision tree with a depth of 2 to 3 characterizations.
+//
+// State description:
+//
+// |State    | Meas-    |Range  |Phys.     |WL (nm) |
+// |Name     | urement  |       |Target    |        |
+// |-------- | -------- | ----- | -------  | ------- |
+// |char_vi1 |  visw    | VIS   |  H20     |  900nm |
+// |char_vi2 |  viso    | VIS   |  O2      |  754nm |
+// |char_ir* |  nir     | NIR   |  CH4/CO2 |  1650nm |
+// |char_uv* |  nuv     | NUV   |  O3/Press|  250nm |
+//    
+// Notation:
+// * "State Name" is the finite state machine name, equivalent to
+// a node in the decision tree.
+// * "Measurement" is a shorthand for the measurement type, 
+// which is linked to the measurement physical target, a
+// wavelength range, and a specific retrieval algorithm.
+// * An algorithm uses specific parameters in "retrieval_models".
+// That is, three states (char_uv1/2/3) gather spectra around
+// 250nm, and thereby estimate O3 and Pressure using
+// "retrieval_models['nuv']". The same
+// measurement is used at 3 places in the decision process.
 //
 {
   "eta": 0.9, // lots of earths to feed the tree
@@ -17,28 +42,6 @@
   "state_initial": {
     "*": "unobserved"
   },
-  /* State description:
-    *  State   Meas-    Range  Phys.    WL (nm)
-    *  Name    urement         Target
-    *  -----   -------  -----  ------   -------
-    * 
-    * vis1      visw    VIS     H20      900nm
-    * vis2      viso    VIS     O2       754nm
-    * nir1/2/3  nir     NIR    CH4/CO2  1650nm
-    * nuv1/2/3  nuv     NUV    O3/Press  250nm
-    *
-    * Notation:
-    * "State Name" is the finite state machine name, equivalent to
-    * a node in the decision tree.
-    * "Measurement" is a shorthand for the measurement type, 
-    * which is linked to the measurement physical target, a
-    * wavelength range, and a specific retrieval algorithm.
-    * For us: specific parameters in "retrieval_models".
-    * That is, three states (nuv1/2/3) gather spectra around
-    * 250nm, and thereby estimate O3 and Pressure using
-    * "retrieval_models['nuv']". The same
-    * measurement is used at 3 places in the decision process.
-  */
   "state_properties": {
       // beginning
       "unobserved": {"mode": -1},

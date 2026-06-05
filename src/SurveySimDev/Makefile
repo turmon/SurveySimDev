@@ -28,9 +28,10 @@ endif
 
 trace: sims/$(S)/README.md
 
-sims/$(S)/README.md: 
+sims/$(S)/README.md: Scripts/$(S).json
 	uv run trace.py --output sims/$(S) Scripts/$(S).json
-	touch $@
+	cp Scripts/$(S).json sims/$(S) 
+	uv run util/write_scheduler_readme.py Scripts/$(S).json > $@
 
 # Run line: Observing sequence only
 simple-trans:
