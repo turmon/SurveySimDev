@@ -1,6 +1,6 @@
 # Simple one-band characterization
 
-Script: [`Scripts/specs-simple.json`](specs-simple.json)
+Script: [`Scripts/specs-simple.json`](specs-simple.json) | [`json5`](specs-simple.json5)
 
 
 Blind Search -> Orbit Characterization -> VIS-range Characterization

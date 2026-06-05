@@ -1,6 +1,6 @@
 # Decision tree observing sequence -- Young et al.
 
-Script: [`Scripts/specs-tree.json`](specs-tree.json)
+Script: [`Scripts/specs-tree.json`](specs-tree.json) | [`json5`](specs-tree.json5)
 
 
 This is a more complex observing sequence encoding a
@@ -8,19 +8,19 @@ simple decision tree with a depth of 2 to 3 characterizations.
 
 State description:
 
-|State    | Meas-    |Range  |Phys.     |WL (nm) |
-|Name     | urement  |       |Target    |        |
-|-------- | -------- | ----- | -------  | ------- |
-|char_vi1 |  visw    | VIS   |  H20     |  900nm |
-|char_vi2 |  viso    | VIS   |  O2      |  754nm |
-|char_ir* |  nir     | NIR   |  CH4/CO2 |  1650nm |
-|char_uv* |  nuv     | NUV   |  O3/Press|  250nm |
+|State Name| Measurement |Range  |Phys. QOI    |WL (nm) |
+|--------- | ----------- | ----- | -------  | ------- |
+|char_vi1  |  visw      | VIS   |  H20     |  900nm |
+|char_vi2  |  viso      | VIS   |  O2      |  754nm |
+|char_ir*  |  nir       | NIR   |  CH4/CO2 |  1650nm |
+|char_uv*  |  nuv       | NUV   |  O3/Press|  250nm |
    
 Notation:
 * "State Name" is the finite state machine name, equivalent to
 a node in the decision tree.
 * "Measurement" is a shorthand for the measurement type, 
-which is linked to the measurement physical target, a
+which is linked to the measurement physical QOI (quantity
+of interest), a
 wavelength range, and a specific retrieval algorithm.
 * An algorithm uses specific parameters in "retrieval_models".
 That is, three states (char_uv1/2/3) gather spectra around

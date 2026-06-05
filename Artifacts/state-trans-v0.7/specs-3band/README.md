@@ -1,6 +1,6 @@
 # Three serial characterizations: VIS, NUV, NIR
 
-Script: [`Scripts/specs-3band.json`](specs-3band.json)
+Script: [`Scripts/specs-3band.json`](specs-3band.json) | [`json5`](specs-3band.json5)
 
 
 Blind Search -> Orbit Characterization -> VIS -> NUV -> NIR

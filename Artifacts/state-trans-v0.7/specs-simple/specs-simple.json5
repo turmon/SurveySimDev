@@ -1,0 +1,77 @@
+//
+// Simple one-band characterization
+//
+// Blind Search -> Orbit Characterization -> VIS-range Characterization
+//
+// This is the simplest characterization concept (VIS-only),
+// but it still includes the blind search phase.
+//
+//
+{
+  "eta": 0.4,
+  "missionLife": 1826.25,
+  "n_star": 30,
+  "seed": 0,
+  "n_det_remove": 4,
+  "n_char_remove": 2,
+  "intCutoff": 60.0,
+  "revisit_wait": 109.575,
+  "gap_required": 182.625,
+  "obs_overhead": 0.2,
+  "char_overhead": 0.8,
+  "state_initial": {
+    "*": "unobserved"
+  },
+  "state_transitions": [
+    { "trigger": "process_det",  "source": "unobserved", "dest": "observing", "unless": "det_exists" },
+    { "trigger": "process_det",  "source": "unobserved", "dest": "orbit_det", "conditions": "det_exists" },
+    { "trigger": "process_det",  "source": "observing",  "dest": "orbit_det", "conditions": "det_exists" },
+    { "trigger": "process_det",  "source": "observing",  "dest": "retired",   "conditions": "det_exhausted",    "after": "forget_star" },
+    { "trigger": "process_det",  "source": "orbit_det",  "dest": "char_vis",  "conditions": ["has_orbit_count",
+											     "has_orbit_span"], "after": "promote_star" },
+    { "trigger": "process_det",  "source": "orbit_det",  "dest": "retired",   "conditions": "orbit_exhausted",  "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_vis",   "dest": "success",   "conditions": "char_exists",      "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_vis",   "dest": "retired",   "conditions": "char_exhausted",   "after": "forget_star" },
+    { "trigger": "end_mission",  "source": ["orbit_det",
+					    "char_vis"], "dest": "found" },
+    { "trigger": "end_mission",  "source": "observing",  "dest": "unknown" }
+  ],
+  // Note on observingModes
+  //  Extras (useful):
+  //     uses: links the SurveySimulation state to this observingMode
+  //     mode_num: it's explicit here, but real EXOSIMS inserts it dynamically
+  //   Extras (non-physical, added just to run the sim):
+  //   int_factor_x: intTime multiplier per char mode (just for a mockup)
+  //     comp_bound_x: lower bound of completeness per mode (just for a mockup)
+  "observingModes": [
+    {
+      "instName": "imaging_BroadbandVisible_500",
+      "systName": "VVC500",
+      "uses": [],
+      "mode_num": -1,
+      "int_factor_x": 1.0,
+      "comp_bound_x": 0.1,
+      "detection": true,
+      "lam": 500,
+      "SNR": 7
+    },
+    {
+      "instName": "spectro910_R70_EMCCD",
+      "systName": "VVC575",
+      "uses": [
+        "char_vis"
+      ],
+      "mode_num": 0,
+      "int_factor_x": 1.2,
+      "comp_bound_x": 0.8,
+      "detection": false,
+      "lam": 910,
+      "SNR": 5.0
+    }
+  ],
+  // Purpose: basic single-band retrieval
+  // concept: defer: get the spectrum for later analysis
+  "retrieval_models": {
+    "char_vis": {},
+  }
+}

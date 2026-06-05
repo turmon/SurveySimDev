@@ -1,0 +1,228 @@
+//
+// Decision tree observing sequence -- Young et al.
+//
+// This is a more complex observing sequence encoding a
+// simple decision tree with a depth of 2 to 3 characterizations.
+//
+// State description:
+//
+// |State Name| Measurement |Range  |Phys. QOI    |WL (nm) |
+// |--------- | ----------- | ----- | -------  | ------- |
+// |char_vi1  |  visw      | VIS   |  H20     |  900nm |
+// |char_vi2  |  viso      | VIS   |  O2      |  754nm |
+// |char_ir*  |  nir       | NIR   |  CH4/CO2 |  1650nm |
+// |char_uv*  |  nuv       | NUV   |  O3/Press|  250nm |
+//    
+// Notation:
+// * "State Name" is the finite state machine name, equivalent to
+// a node in the decision tree.
+// * "Measurement" is a shorthand for the measurement type, 
+// which is linked to the measurement physical QOI (quantity
+// of interest), a
+// wavelength range, and a specific retrieval algorithm.
+// * An algorithm uses specific parameters in "retrieval_models".
+// That is, three states (char_uv1/2/3) gather spectra around
+// 250nm, and thereby estimate O3 and Pressure using
+// "retrieval_models['nuv']". The same
+// measurement is used at 3 places in the decision process.
+//
+{
+  "eta": 0.9, // lots of earths to feed the tree
+  "one_planet": true,
+  "missionLife": 1826.25,
+  "n_star": 30,
+  "seed": 0,
+  "n_det_remove": 4,
+  "n_char_remove": 2,
+  "intCutoff": 60.0,
+  "revisit_wait": 109.575,
+  "gap_required": 182.625,
+  "obs_overhead": 0.2,
+  "char_overhead": 0.8,
+  "state_initial": {
+    "*": "unobserved"
+  },
+  "state_properties": {
+      // beginning
+      "unobserved": {"mode": -1},
+      "observing": {"mode": -1},
+      "orbit_det": {"mode": -1},
+      // chars
+      "char_vi1": {"mode": 0},
+      "char_vi2": {"mode": 1},
+      "char_ir1": {"mode": 2},
+      "char_ir2": {"mode": 2},
+      "char_ir3": {"mode": 2},
+      "char_uv1": {"mode": 3},
+      "char_uv2": {"mode": 3},
+      "char_uv3": {"mode": 3},
+      // outcomes
+      "found":       {"terminal": true},
+      "retired":     {"terminal": true},
+      "unknown":     {"terminal": true},
+      "ambiguous":   {"terminal": true, "success": -1},
+      "partial":     {"terminal": true, "success": -1},
+      "archean":     {"terminal": true, "success": 1},
+      "dead_rocky":  {"terminal": true, "success": 1},
+      "modern":      {"terminal": true, "success": 1},
+      "proterozoic": {"terminal": true, "success": 1},
+  },
+  "state_transitions": [
+    // these are OK
+    { "trigger": "process_det",  "source": "unobserved", "dest": "observing", "unless":     "det_exists" },
+    { "trigger": "process_det",  "source": "unobserved", "dest": "orbit_det", "conditions": "det_exists" },
+    { "trigger": "process_det",  "source": "observing",  "dest": "orbit_det", "conditions": "det_exists" },
+    { "trigger": "process_det",  "source": "observing",  "dest": "retired",   "conditions": "det_exhausted",  "after": "forget_star" },
+    { "trigger": "process_det",  "source": "orbit_det",  "dest": "char_vi1",  "conditions": ["has_orbit_count",
+									 		     "has_orbit_span"], "after": "promote_star" },
+    { "trigger": "process_det",  "source": "orbit_det",   "dest": "retired",  "conditions": "orbit_exhausted", "after": "forget_star" },
+    // VIS, Node vis1, H2O/CH4 ("visw")
+    { "trigger": "process_char", "source": "char_vi1", "dest": "dead_rocky", "conditions": "sr_H2O_no",    "after": "forget_star"  },
+    { "trigger": "process_char", "source": "char_vi1", "dest": "char_ir3",   "conditions": "sr_H2O_yes_CH4_yes" },
+    { "trigger": "process_char", "source": "char_vi1", "dest": "char_vi2",   "conditions": "sr_H2O_yes" },
+    { "trigger": "process_char", "source": "char_vi1", "dest": "retired",    "conditions": "char_exhausted",   "after": "forget_star" },
+    // VIS, Node vis2, O2 ("viso")
+    { "trigger": "process_char", "source": "char_vi2",  "dest": "dead_rocky","conditions": "sr_O2_high",   "after": "forget_star"  },
+    { "trigger": "process_char", "source": "char_vi2",  "dest": "char_ir1",  "conditions": "sr_O2_medium" },
+    { "trigger": "process_char", "source": "char_vi2",  "dest": "char_ir2",  "conditions": "sr_O2_no" },
+    { "trigger": "process_char", "source": "char_vi2",  "dest": "partial",   "conditions": "char_exhausted",   "after": "forget_star" },
+    // NIR, Node nir1, CH4/CO2 ("nir")
+    { "trigger": "process_char", "source": "char_ir1",  "dest": "char_uv1",  "conditions": "sr_CH4_no" },
+    { "trigger": "process_char", "source": "char_ir1",  "dest": "modern",    "conditions": "sr_CH4_yes" },
+    { "trigger": "process_char", "source": "char_ir1",  "dest": "partial",   "conditions": "char_exhausted",   "after": "forget_star" },
+    // NIR, Node nir2, CH4/CO2 ("nir")
+    { "trigger": "process_char", "source": "char_ir2",  "dest": "char_uv3",  "conditions": "sr_CH4_yes_CO2_yes" }, // right branch
+    { "trigger": "process_char", "source": "char_ir2",  "dest": "char_uv2",  "conditions": "sr_ok" },    // left branch ("else")
+    { "trigger": "process_char", "source": "char_ir2",  "dest": "partial",   "conditions": "char_exhausted",   "after": "forget_star" },
+    // NIR, Node nir3, CO2  ("nir")
+    { "trigger": "process_char", "source": "char_ir3",  "dest": "ambiguous", "conditions": "sr_CO2_no",      "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_ir3",  "dest": "archean",   "conditions": "sr_CO2_yes",     "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_ir3",  "dest": "partial",   "conditions": "char_exhausted", "after": "forget_star" },
+    // NUV, Node nuv1, pressure ("nuv")
+    { "trigger": "process_char", "source": "char_uv1",  "dest": "ambiguous", "conditions": "sr_press_low",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv1",  "dest": "modern",    "conditions": "sr_press_high",  "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv1",  "dest": "partial",   "conditions": "char_exhausted", "after": "forget_star" },
+    // NUV, Node nuv2, O3 ("nuv")
+    { "trigger": "process_char", "source": "char_uv2",  "dest": "proterozoic","conditions":"sr_press_low",   "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv2",  "dest": "ambiguous", "conditions": "sr_press_high",  "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv2",  "dest": "partial",   "conditions": "char_exhausted", "after": "forget_star" },
+    // NUV, Node nuv3, O3 ("nuv")
+    { "trigger": "process_char", "source": "char_uv3",  "dest": "archean",   "conditions": "sr_O3_no",       "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv3",  "dest": "proterozoic","conditions":"sr_O3_yes",      "after": "forget_star" },
+    { "trigger": "process_char", "source": "char_uv3",  "dest": "partial",   "conditions": "char_exhausted", "after": "forget_star" },
+    // sweep up
+    { "trigger": "end_mission",  "source": ["char_vi2",
+					    "char_ir1", "char_ir2", "char_ir3",
+					    "char_uv1", "char_uv2", "char_uv3",],  "dest": "partial" },
+    { "trigger": "end_mission",  "source": ["orbit_det",
+					    "char_vi1"],  "dest": "found" },
+    { "trigger": "end_mission",  "source": "observing",   "dest": "unknown" }
+  ],
+  // Note on observingModes
+  //  Extras (useful):
+  //     uses: links the SurveySimulation state to this observingMode
+  //     mode_num: it's explicit here, but real EXOSIMS inserts it dynamically
+  //   Extras (non-physical, added just to run the sim):
+  //   int_factor_x: intTime multiplier per char mode (just for a mockup)
+  //     comp_bound_x: lower bound of completeness per mode (just for a mockup)
+  "observingModes": [
+    {
+      "instName": "imaging_BroadbandVisible_500",
+      "systName": "VVC500",
+      "uses": [],
+      "mode_num": -1,
+      "int_factor_x": 1.0,
+      "comp_bound_x": 0.1,
+      "detection": true,
+      "lam": 500,
+      "SNR": 7
+    },
+      // VIS, water band
+    {
+      "instName": "spectro910_R70_EMCCD",
+      "systName": "VVC575",
+      "mode_num": 0,
+      "int_factor_x": 1.2,
+      "comp_bound_x": 0.8,
+      "detection": false,
+      "lam": 910,
+      "SNR": 5.0
+    },
+      // VIS, O2
+    {
+      "instName": "spectro740_R70_EMCCD", // updated wavelength
+      "systName": "VVC575",
+      "mode_num": 1,
+      "int_factor_x": 1.2,
+      "comp_bound_x": 0.8,
+      "detection": false,
+      "lam": 740,
+      "SNR": 5.0
+    },
+    {
+      "instName": "spectro1650_R40_EMCCD", // updated WL
+      "systName": "VVC575",
+      "mode_num": 2,
+      "int_factor_x": 1.8,
+      "comp_bound_x": 0.8,
+      "detection": false,
+      "lam": 1650,
+      "SNR": 8.5
+    },
+    {
+      "instName": "spectro_NUV254_EMCCD", // updated WL
+      "systName": "VVC575",
+      "mode_num": 3,
+      "int_factor_x": 1.0,
+      "comp_bound_x": 0.9,
+      "detection": false,
+      "lam": 254,
+      "SNR": 5.0
+    },
+  ],
+  // As noted above, there is one model per mode_num, a.k.a.,
+  // retrieval target -- in essence, a specific spectral bandwidth
+  // or set of science QOIs
+  // This is indexed by mode_num now, which I don't like
+  "retrieval_models": {
+    // VIS, water bands
+    "QOIs_0": {
+      "H2O": {
+        "no": 0.1,
+        "yes": 0.6
+      },
+      "CH4": {
+        "no": 0.1,
+        "yes": 0.6
+      }
+    },
+    // VIS, O2
+    "QOIs_1": {
+      "O2": {
+        "no": 0.2,
+        "medium": 0.5,
+        "high": 0.8
+      }
+    },
+    "QOIs_2": {
+      "CO2": {
+        "no": 0.3,
+        "yes": 0.7
+      },
+      "CH4": {
+        "no": 0.4,
+        "yes": 0.7
+      }
+    },
+    "QOIs_3": {
+      "O3": {
+        "no": 0.2,
+        "yes": 0.7
+      },
+      "press": {
+        "low": 0.3,
+        "high": 0.8
+      }
+    }
+  }
+}
