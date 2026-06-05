@@ -84,7 +84,8 @@ def main():
     out = []
     out.append(f'# {heading}')
     out.append('')
-    out.append(f'Script: [`{json_path}`]({json_path.name})')
+    json5_name = json_path.with_suffix('.json5').name
+    out.append(f'Script: [`{json_path}`]({json_path.name}) | [`json5`]({json5_name})')
     if body_lines:
         out.append('')
         out.extend(body_lines)
