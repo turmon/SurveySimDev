@@ -6,7 +6,10 @@ Currently trying out state-transition or finite-state-machine approaches and thi
 about whether they can be general enough to accommodate decision-tree-like 
 observation choice.
 
-For design information and current status, see `CLAUDE.md`.
+For design information and some current development status, see `CLAUDE.md`.
+
+Descriptive run artifacts (graphics) are present by tagged release in
+[`Artifacts`](Artifacts).
 
 (June 2026)
 
