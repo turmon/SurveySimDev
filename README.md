@@ -1,5 +1,7 @@
 # EXOSIMS-Scheduler-Dev
 
+[!State Chart Example](example-FSM.png)
+
 Area for experiments in scheduler design for EXOSIMS.
 
 Currently trying out state-transition or finite-state-machine approaches and thinking 
